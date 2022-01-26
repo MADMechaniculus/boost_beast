@@ -1,10 +1,12 @@
 TEMPLATE = app
-CONFIG += console c++11
+CONFIG += console c++14
 CONFIG -= app_bundle
 CONFIG -= qt
 
 SOURCES += \
-        main.cpp
+        main.cpp \
+        messagehandler.cpp \
+        requesthandler.cpp
 
 INCLUDEPATH += "C:\\include\\boost_1_76_0"
 
@@ -18,3 +20,7 @@ LIBS += -L"C:\\libs\\boost_1.76.0" \
         -lmswsock
 
 DISTFILES += .gitignore
+
+HEADERS += \
+    messagehandler.h \
+    requesthandler.h
