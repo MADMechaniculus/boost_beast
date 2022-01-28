@@ -14,16 +14,40 @@
 
 #include "messagehandler.h"
 
+#define PRINT_REQ_TARGET_STRING 1
+
 namespace beast = boost::beast;         // from <boost/beast.hpp>
 namespace http = beast::http;           // from <boost/beast/http.hpp>
 namespace net = boost::asio;            // from <boost/asio.hpp>
 
 /**
+ * @brief Абстракция процессора POST запросов
+ */
+class AbstractPOSTProc {
+public:
+    AbstractPOSTProc() {};
+    virtual bool process(std::string target) = 0;
+};
+
+/**
+ * @brief Абстракция процессора GET запросов
+ */
+class AbstractGETProc {
+public:
+    AbstractGETProc() {};
+    virtual bool process(std::string target) = 0;
+};
+
+/**
  * @brief Базовый класс обработчика http запросов
  */
+template<class POSTPROC, class GETPROC>
 class RequestHandler
 {
 private:
+    POSTPROC & postProcessorRef;
+    GETPROC & getProcessorRef;
+
     class ResponseGenerator {
     public:
         ResponseGenerator() {}
@@ -134,10 +158,8 @@ protected:
         return "application/text";
     }
 
-
-
 public:
-    RequestHandler();
+    RequestHandler(POSTPROC & postRef, GETPROC & getRef) : postProcessorRef(postRef), getProcessorRef(getRef) { };
 
     // This is the C++11 equivalent of a generic lambda.
     // The function object is used to send an HTTP message.
@@ -174,15 +196,137 @@ public:
     void operator()(beast::string_view doc_root,
                     http::request<Body, http::basic_fields<Allocator>>&& req,
                     Send&& send) {
-        // Make sure we can handle the method
-        if( req.method() != http::verb::get &&
-                req.method() != http::verb::head &&
-                req.method() != http::verb::post)
-            return send(ResponseGenerator::bad_request(req, "Unknown HTTP-method"));
 
         http::file_body::value_type body;
         std::string path = "";
         beast::error_code ec;
+        bool checkFlag = false;
+
+        /**
+         * @enum FAST_REQUESTS
+         * @brief Перечисление возможных ошибок при подготовке тела
+         */
+        enum FAST_REQUESTS {
+            IllegalRequestTarget,
+            NotFound,
+            ServerError,
+            __undef
+        };
+
+        // Обработчик ошибки пдготовки запроса
+        auto processError = [&]() {
+            std::cout << "processError()" << std::endl;
+            if (checkFlag)
+                return FAST_REQUESTS::IllegalRequestTarget;
+            if(ec == beast::errc::no_such_file_or_directory)
+                return FAST_REQUESTS::NotFound;
+            if(ec)
+                return FAST_REQUESTS::ServerError;
+            return FAST_REQUESTS::__undef;
+        };
+
+        // Проверка запрашиваемого target
+        auto targetCheck = [&]() {
+            std::cout << "targetCheck()" << std::endl;
+            return (req.target().empty() ||
+                    req.target()[0] != '/' ||
+                    req.target().find("..") != beast::string_view::npos);
+        };
+
+        // Подготовка тела запроса
+        auto prepare = [&]() {
+            std::cout << "prepare()" << std::endl;
+            if ((checkFlag = targetCheck()) == true) {
+                return false;
+            }
+
+            // Build the path to the requested file
+            path = path_cat(doc_root, req.target());
+            if(req.target().back() == '/')
+                path.append("index.html");
+
+            // Attempt to open the file
+            body.open(path.c_str(), beast::file_mode::scan, ec);
+
+            // Handle the case where the file doesn't exist
+            if(ec == beast::errc::no_such_file_or_directory)
+                return false; // send(ResponseGenerator::not_found(req, req.target()));
+
+            // Handle an unknown error
+            if(ec)
+                return false; // send(ResponseGenerator::server_error(req, ec.message()));
+
+            return true;
+        };
+
+        /// [TODO]:
+        /// - при обработке запроса, мы проверяем его корректность
+        /// - после этого, происходит ветвление по типу запроса
+        /// - при ветвлении вызываются кастомные обработчики, которые указываются пользователем
+        /// - после выполнения ветвления и возврата результата обработчиков вызывается функция отправки ответа
+
+#if PRINT_REQ_TARGET_STRING == 1
+        // Вывод содержимого target поступившего запроса
+        std::cout << http::to_string(req.method()) << std::endl;
+        std::cout << req.target() << std::endl;
+#endif
+
+        switch (req.method()) {
+        case http::verb::post:
+            std::cout << req["firstName"].to_string() << std::endl;
+            //this->postProcessorRef.process(req.target());
+            if (!prepare()) {
+                switch (processError()) {
+                case FAST_REQUESTS::IllegalRequestTarget:
+                    return send(ResponseGenerator::bad_request(req, "Illegal request-target"));
+                    break;
+                case FAST_REQUESTS::NotFound:
+                    return send(ResponseGenerator::not_found(req, req.target()));
+                    break;
+                default:
+                    return send(ResponseGenerator::server_error(req, ec.message()));
+                    break;
+                }
+            }
+            break;
+        case http::verb::get:
+            if (this->getProcessorRef.process(req.target().to_string())) {
+                // [TODO] custom package answer
+            } else {
+                if (!prepare()) {
+                    switch (processError()) {
+                    case FAST_REQUESTS::IllegalRequestTarget:
+                        return send(ResponseGenerator::bad_request(req, "Illegal request-target"));
+                        break;
+                    case FAST_REQUESTS::NotFound:
+                        return send(ResponseGenerator::not_found(req, req.target()));
+                        break;
+                    default:
+                        return send(ResponseGenerator::server_error(req, ec.message()));
+                        break;
+                    }
+                }
+            }
+            break;
+        case http::verb::head:
+            if (!prepare()) {
+                switch (processError()) {
+                case FAST_REQUESTS::IllegalRequestTarget:
+                    return send(ResponseGenerator::bad_request(req, "Illegal request-target"));
+                    break;
+                case FAST_REQUESTS::NotFound:
+                    return send(ResponseGenerator::not_found(req, req.target()));
+                    break;
+                default:
+                    return send(ResponseGenerator::server_error(req, ec.message()));
+                    break;
+                }
+            }
+            break;
+        default:    ///< Этот кейс выполняется при поступлении необрабатываемого запроса
+            send(ResponseGenerator::server_error(req, "I'm sorry, but I don't know how to process such a request yet, sorry :("));
+            break;
+        }
 
         if (req.method() == http::verb::post) {
             std::string str = "{ \"message\": \"Request handled!\" }";
@@ -205,31 +349,6 @@ public:
             } else {
                 return send(ResponseGenerator::server_error(req, "Can`t create file!"));
             }
-
-        } else {
-
-            // Request path must be absolute and not contain "..".
-            if( req.target().empty() ||
-                    req.target()[0] != '/' ||
-                    req.target().find("..") != beast::string_view::npos)
-                return send(ResponseGenerator::bad_request(req, "Illegal request-target"));
-
-            // Build the path to the requested file
-            path = path_cat(doc_root, req.target());
-            if(req.target().back() == '/')
-                path.append("index.html");
-
-            // Attempt to open the file
-            body.open(path.c_str(), beast::file_mode::scan, ec);
-
-            // Handle the case where the file doesn't exist
-            if(ec == beast::errc::no_such_file_or_directory)
-                return send(ResponseGenerator::not_found(req, req.target()));
-
-            // Handle an unknown error
-            if(ec)
-                return send(ResponseGenerator::server_error(req, ec.message()));
-
         }
 
         // Cache the size since we need it after the move

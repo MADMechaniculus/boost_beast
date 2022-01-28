@@ -35,6 +35,34 @@ namespace net = boost::asio;            // from <boost/asio.hpp>
 using tcp = boost::asio::ip::tcp;       // from <boost/asio/ip/tcp.hpp>
 
 //------------------------------------------------------------------------------
+// Определение кастомных процессоров типов запросов
+
+class CustomPOSTProcessor : public AbstractPOSTProc
+{
+public:
+    CustomPOSTProcessor() : AbstractPOSTProc() {}
+
+    bool process(std::string target) {
+        std::cout << "Call from " << __PRETTY_FUNCTION__ << std::endl;
+        std::cout << "Target: " << target << std::endl;
+        return true;
+    }
+};
+
+class CustomGETProcessor : public AbstractGETProc
+{
+public:
+    CustomGETProcessor() : AbstractGETProc() {}
+
+    bool process(std::string target) {
+        std::cout << "Call from " << __PRETTY_FUNCTION__ << std::endl;
+        std::cout << "Target: " << target << std::endl;
+        return false;
+    }
+};
+
+// Определение типа используемого обрабочика запросов
+typedef RequestHandler<CustomPOSTProcessor, CustomGETProcessor> reqHndlr_t;
 
 // Report a failure
 void fail(beast::error_code ec, char const* what)
@@ -43,7 +71,11 @@ void fail(beast::error_code ec, char const* what)
 }
 
 // Handles an HTTP server connection
-void do_session(tcp::socket& socket, std::shared_ptr<std::string const> const& doc_root, RequestHandler & handler)
+template<class ReqHandler>
+void do_session(tcp::socket& socket, std::shared_ptr<std::string const> const& doc_root, ReqHandler & handler);
+
+template<>
+void do_session<reqHndlr_t>(tcp::socket& socket, std::shared_ptr<std::string const> const& doc_root, reqHndlr_t & handler)
 {
     bool close = false;
     beast::error_code ec;
@@ -52,7 +84,7 @@ void do_session(tcp::socket& socket, std::shared_ptr<std::string const> const& d
     beast::flat_buffer buffer;
 
     // This lambda is used to send messages
-    RequestHandler::send_lambda<tcp::socket> lambda{socket, close, ec};
+    reqHndlr_t::send_lambda<tcp::socket> lambda{socket, close, ec};
 
     for(;;)
     {
@@ -98,10 +130,14 @@ int main(int argc, char* argv[])
             return EXIT_FAILURE;
         }
 
+        CustomPOSTProcessor postProc;
+        CustomGETProcessor getProc;
+
         auto const address = net::ip::make_address(argv[1]);
         auto const port = static_cast<unsigned short>(std::atoi(argv[2]));
         auto const doc_root = std::make_shared<std::string>(argv[3]);
-        RequestHandler handler;
+
+        reqHndlr_t handler(postProc, getProc);
 
         // The io_context is required for all I/O
         net::io_context ioc{1};
@@ -118,7 +154,7 @@ int main(int argc, char* argv[])
 
             // Launch the session, transferring ownership of the socket
             std::thread{std::bind(
-                            &do_session,
+                            &do_session<reqHndlr_t>,
                             std::move(socket),
                             doc_root,
                             handler)}.detach();
