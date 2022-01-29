@@ -4,6 +4,8 @@ CONFIG -= app_bundle
 CONFIG -= qt
 
 SOURCES += \
+        abstractapplication.cpp \
+        eventloopapplication.cpp \
         main.cpp \
         messagehandler.cpp \
         requesthandler.cpp
@@ -15,6 +17,7 @@ LIBS += -L"C:\\libs\\boost_1.76.0" \
         -lboost_thread-mgw7-mt-x32-1_76 \
         -lboost_filesystem-mgw7-mt-x32-1_76 \
         -lboost_regex-mgw7-mt-x32-1_76 \
+        -lboost_program_options-mgw7-mt-x32-1_76 \
         -lpthread \
         -lws2_32 \
         -lmswsock
@@ -22,5 +25,7 @@ LIBS += -L"C:\\libs\\boost_1.76.0" \
 DISTFILES += .gitignore
 
 HEADERS += \
+    abstractapplication.h \
+    eventloopapplication.h \
     messagehandler.h \
     requesthandler.h

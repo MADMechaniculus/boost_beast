@@ -13,12 +13,16 @@
 //
 //------------------------------------------------------------------------------
 
+#define SERVER_VERSION_MAJOR 0
+#define SERVER_VERSION_MINOR 3
+
 #include <boost/beast/core.hpp>
 #include <boost/beast/http.hpp>
 #include <boost/beast/version.hpp>
 #include <boost/asio/ip/tcp.hpp>
 #include <boost/config.hpp>
 #include <boost/filesystem.hpp>
+#include <boost/json/src.hpp>
 #include <cstdlib>
 #include <iostream>
 #include <memory>
@@ -42,10 +46,51 @@ class CustomPOSTProcessor : public AbstractPOSTProc
 public:
     CustomPOSTProcessor() : AbstractPOSTProc() {}
 
-    bool process(std::string target) {
-        std::cout << "Call from " << __PRETTY_FUNCTION__ << std::endl;
-        std::cout << "Target: " << target << std::endl;
-        return true;
+    bool process(std::string target, http::file_body::value_type & ansBody) {
+
+        std::cout << "[POST]\n";
+        std::cout << target << std::endl;
+
+        boost::json::object answerJson;
+
+        boost::json::object obj;
+        boost::json::value value = boost::json::parse(target);
+        obj = value.as_object();
+
+        answerJson["retCode"] = 0;
+
+        if (obj["requestedFuncIndex"].is_int64()) {
+            switch (obj["requestedFuncIndex"].as_int64()) {
+            case 0:
+
+                answerJson["serverVersion"] = { {"major", SERVER_VERSION_MAJOR}, {"minor", SERVER_VERSION_MINOR} };
+                answerJson["boostVersion"] = BOOST_LIB_VERSION;
+                answerJson["retCode"] = (int64_t)0;
+
+                break;
+            default:
+                answerJson["retCode"] = (int64_t)-1;
+                break;
+            }
+
+            boost::system::error_code ec;
+            std::string serialized = boost::json::serialize(answerJson);
+            std::string path = "";
+            std::ofstream simpleJson("./simple.json");
+            if (simpleJson.is_open()) {
+                simpleJson.write(serialized.c_str(), serialized.size());
+                simpleJson.close();
+
+                boost::filesystem::path filePath("./simple.json");
+                path = boost::filesystem::absolute(filePath).generic_string();
+                ansBody.open(path.c_str(), beast::file_mode::scan, ec);
+            } else {
+                return false;
+            }
+
+            return true;
+        }
+        return false;
     }
 };
 
@@ -54,10 +99,10 @@ class CustomGETProcessor : public AbstractGETProc
 public:
     CustomGETProcessor() : AbstractGETProc() {}
 
-    bool process(std::string target) {
+    bool process(std::string target, http::file_body::value_type & ansBody) {
         std::cout << "Call from " << __PRETTY_FUNCTION__ << std::endl;
         std::cout << "Target: " << target << std::endl;
-        return false;
+        return false;   // always false, for default static response
     }
 };
 

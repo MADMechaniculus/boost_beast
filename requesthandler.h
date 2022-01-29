@@ -14,7 +14,7 @@
 
 #include "messagehandler.h"
 
-#define PRINT_REQ_TARGET_STRING 1
+#define PRINT_REQ_TARGET_STRING 0
 
 namespace beast = boost::beast;         // from <boost/beast.hpp>
 namespace http = beast::http;           // from <boost/beast/http.hpp>
@@ -26,7 +26,7 @@ namespace net = boost::asio;            // from <boost/asio.hpp>
 class AbstractPOSTProc {
 public:
     AbstractPOSTProc() {};
-    virtual bool process(std::string target) = 0;
+    virtual bool process(std::string target, http::file_body::value_type & ansBody) = 0;
 };
 
 /**
@@ -35,7 +35,7 @@ public:
 class AbstractGETProc {
 public:
     AbstractGETProc() {};
-    virtual bool process(std::string target) = 0;
+    virtual bool process(std::string target, http::file_body::value_type & ansBody) = 0;
 };
 
 /**
@@ -201,6 +201,7 @@ public:
         std::string path = "";
         beast::error_code ec;
         bool checkFlag = false;
+        std::ostringstream postStream;
 
         /**
          * @enum FAST_REQUESTS
@@ -273,24 +274,27 @@ public:
 
         switch (req.method()) {
         case http::verb::post:
-            std::cout << req["firstName"].to_string() << std::endl;
-            //this->postProcessorRef.process(req.target());
-            if (!prepare()) {
-                switch (processError()) {
-                case FAST_REQUESTS::IllegalRequestTarget:
-                    return send(ResponseGenerator::bad_request(req, "Illegal request-target"));
-                    break;
-                case FAST_REQUESTS::NotFound:
-                    return send(ResponseGenerator::not_found(req, req.target()));
-                    break;
-                default:
-                    return send(ResponseGenerator::server_error(req, ec.message()));
-                    break;
+            postStream << req.body();
+            if (this->postProcessorRef.process(postStream.str(), body)) {
+
+            } else {
+                if (!prepare()) {
+                    switch (processError()) {
+                    case FAST_REQUESTS::IllegalRequestTarget:
+                        return send(ResponseGenerator::bad_request(req, "Illegal request-target"));
+                        break;
+                    case FAST_REQUESTS::NotFound:
+                        return send(ResponseGenerator::not_found(req, req.target()));
+                        break;
+                    default:
+                        return send(ResponseGenerator::server_error(req, ec.message()));
+                        break;
+                    }
                 }
             }
             break;
         case http::verb::get:
-            if (this->getProcessorRef.process(req.target().to_string())) {
+            if (this->getProcessorRef.process(req.target().to_string(), body)) {
                 // [TODO] custom package answer
             } else {
                 if (!prepare()) {
@@ -328,6 +332,7 @@ public:
             break;
         }
 
+        /*
         if (req.method() == http::verb::post) {
             std::string str = "{ \"message\": \"Request handled!\" }";
             std::ofstream simpleJson("./simple.json");
@@ -350,6 +355,7 @@ public:
                 return send(ResponseGenerator::server_error(req, "Can`t create file!"));
             }
         }
+        */
 
         // Cache the size since we need it after the move
         auto const size = body.size();
