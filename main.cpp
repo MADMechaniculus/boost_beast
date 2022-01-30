@@ -15,6 +15,7 @@
 
 #define SERVER_VERSION_MAJOR 0
 #define SERVER_VERSION_MINOR 3
+#define APPLICATION_NAME "Boost beast testing server application"
 
 #include <boost/beast/core.hpp>
 #include <boost/beast/http.hpp>
@@ -46,15 +47,15 @@ class CustomPOSTProcessor : public AbstractPOSTProc
 public:
     CustomPOSTProcessor() : AbstractPOSTProc() {}
 
-    bool process(std::string target, http::file_body::value_type & ansBody) {
+    bool process(std::string targetJson, http::file_body::value_type & ansBody) {
 
         std::cout << "[POST]\n";
-        std::cout << target << std::endl;
+        std::cout << targetJson << std::endl;
 
         boost::json::object answerJson;
 
         boost::json::object obj;
-        boost::json::value value = boost::json::parse(target);
+        boost::json::value value = boost::json::parse(targetJson);
         obj = value.as_object();
 
         answerJson["retCode"] = 0;
@@ -65,6 +66,7 @@ public:
 
                 answerJson["serverVersion"] = { {"major", SERVER_VERSION_MAJOR}, {"minor", SERVER_VERSION_MINOR} };
                 answerJson["boostVersion"] = BOOST_LIB_VERSION;
+                answerJson["appName"] = APPLICATION_NAME;
                 answerJson["retCode"] = (int64_t)0;
 
                 break;
@@ -87,7 +89,6 @@ public:
             } else {
                 return false;
             }
-
             return true;
         }
         return false;
