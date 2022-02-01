@@ -26,6 +26,7 @@ DISTFILES += .gitignore
 
 HEADERS += \
     abstractapplication.h \
+    defines.h \
     eventloopapplication.h \
     messagehandler.h \
     requesthandler.h
