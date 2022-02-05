@@ -4,18 +4,18 @@
 #include <string>
 
 #define INTERFACE_SET_IMPL(classname, method, input_t) \
-    std::string method::name = ""#method""; \
-    std::string method::type = "interface_getter"; \
+    std::string classname::method::name = ""#method""; \
+    std::string classname::method::type = "interface_getter"; \
     void classname::method::__call(input_t & input)
 
 #define INTERFACE_GET_IMPL(classname, method, output_t) \
-    std::string method::name = ""#method""; \
-    std::string method::type = "interface_getter"; \
+    std::string classname::method::name = ""#method""; \
+    std::string classname::method::type = "interface_getter"; \
     void classname::method::__call(output_t & output)
 
 #define INTERFACE_IMPL(classname, method, input_t, output_t) \
-    std::string method::name = ""#method""; \
-    std::string method::type = "interface_getter"; \
+    std::string classname::method::name = ""#method""; \
+    std::string classname::method::type = "interface_getter"; \
     void classname::method::__call(input_t & input, output_t & output)
 
 #define INTERFACE_BODY(method) \

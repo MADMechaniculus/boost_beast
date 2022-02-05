@@ -33,6 +33,7 @@
 
 #include "requesthandler.h"
 #include "messagehandler.h"
+#include "eventloopapplication.h"
 
 namespace beast = boost::beast;         // from <boost/beast.hpp>
 namespace http = beast::http;           // from <boost/beast/http.hpp>
@@ -44,8 +45,9 @@ using tcp = boost::asio::ip::tcp;       // from <boost/asio/ip/tcp.hpp>
 
 class CustomPOSTProcessor : public AbstractPOSTProc
 {
+    EventLoopApplication * appPtr;
 public:
-    CustomPOSTProcessor() : AbstractPOSTProc() {}
+    CustomPOSTProcessor(EventLoopApplication * app) : AbstractPOSTProc(), appPtr(app) {}
 
     bool process(std::string targetJson, http::file_body::value_type & ansBody) {
 
@@ -97,8 +99,9 @@ public:
 
 class CustomGETProcessor : public AbstractGETProc
 {
+    EventLoopApplication * appPtr;
 public:
-    CustomGETProcessor() : AbstractGETProc() {}
+    CustomGETProcessor(EventLoopApplication * app) : AbstractGETProc(), appPtr(app) {}
 
     bool process(std::string target, http::file_body::value_type & ansBody) {
         std::cout << "Call from " << __PRETTY_FUNCTION__ << std::endl;
@@ -176,8 +179,10 @@ int main(int argc, char* argv[])
             return EXIT_FAILURE;
         }
 
-        CustomPOSTProcessor postProc;
-        CustomGETProcessor getProc;
+        EventLoopApplication application(argc, argv);
+
+        CustomPOSTProcessor postProc(&application);
+        CustomGETProcessor getProc(&application);
 
         auto const address = net::ip::make_address(argv[1]);
         auto const port = static_cast<unsigned short>(std::atoi(argv[2]));

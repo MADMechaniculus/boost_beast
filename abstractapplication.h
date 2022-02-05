@@ -4,6 +4,9 @@
 #include <boost/program_options.hpp>
 #include <boost/atomic.hpp>
 
+#define INTERFACES \
+    public:
+
 /**
  * @class AbstractApplication
  * @brief Абстрактный класс приложения
@@ -30,14 +33,14 @@ public:
      *
      * @return Значение флага занятости
      */
-    bool getBusy(void) {
+    bool getBusy(void) const {
         bool ret = isBusy;
         return ret;
     }
 
-    virtual bool init(InitParams &params) =0;
-    virtual bool process(ProcessParams &params) =0;
-    virtual bool stop(StopParams &params) =0;
+    virtual int init(InitParams &params) =0;
+    virtual int process(ProcessParams &params) =0;
+    virtual int stop(StopParams &params) =0;
 };
 
 #endif // ABSTRACTAPPLICATION_H

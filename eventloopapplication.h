@@ -5,16 +5,27 @@
 #include "defines.h"
 
 #include <boost/function.hpp>
+#include <boost/thread.hpp>
 
 #include <queue>
+#include <iostream>
+
+typedef boost::function<void()> request_t;
 
 /**
  * @brief Очередь задач для приложения, поступающих извне
  */
-typedef std::queue<boost::function<void()>> taskQueue_t;
+typedef std::queue<request_t> taskQueue_t;
 
 typedef struct {
+    uint16_t major;
+    uint16_t minor;
+} version_t;
 
+typedef struct {
+    std::string boostLibVersion;
+    std::string applicationName;
+    version_t appVersion;
 } appDescription_t;
 
 typedef struct {
@@ -34,10 +45,12 @@ class EventLoopApplication : public AbstractApplication<initParams_t, processPar
 {
     taskQueue_t internatlTaskQueue;
 
+    std::string applicationName{"EventLoopApplication"};
+
+    boost::atomic<bool> externStop{false};
+
 public:
     EventLoopApplication(int argc, char * argv[]) : AbstractApplication<initParams_t, processParams_t, stopParams_t>(argc, argv) { }
-
-    INTERFACE_GET_DECL(getAppDescription, appDescription_t);
 
     bool pullTask(std::function<void()> && task) {
         if (this->internatlTaskQueue.size() < 10) {
@@ -49,18 +62,22 @@ public:
         }
     }
 
-    bool init(initParams_t & params) {
+    int init(initParams_t & params) {
         (void)params;
-        return true;
+        return 0;
     }
 
-    bool process(processParams_t & params) {
+    int process(processParams_t & params) {
         (void)params;
+
+        int cycles = 0;
 
         // Infinite loop
         while (true) {
             // main application procedures
             // Some hard work
+
+            boost::this_thread::sleep_for(boost::chrono::milliseconds(1000));
 
             /// Это решение в лоб :) (вряд ли правильное и эффективное)
             /// Задачи поступаемые от http сервера имеют самый низкий приоритет, поэтому на стороне
@@ -69,20 +86,55 @@ public:
             if (!internatlTaskQueue.empty()) {
                 internatlTaskQueue.front()();
                 internatlTaskQueue.pop();
+            } else {
+                cycles++;
+            }
+
+            if (cycles > 5) {
+                std::cout << "Application have not requested work!\n";
+                break;
             }
         }
 
-        return true;
+        return 0;
     }
 
-    bool stop(stopParams_t & params) {
+    /**
+     * @brief Асинхронная остановка работы приложения
+     */
+    void stopAsync() {
+        this->externStop.store(true);
+    }
+
+    /**
+     * @brief Нормальная деинициализация приложения
+     * @param params Параметры деинициализации
+     * @return
+     */
+    int stop(stopParams_t & params) {
         (void)params;
-        return true;
+        return 0;
+    }
+
+INTERFACES
+
+    static void getAppDescription(EventLoopApplication * self, appDescription_t & output) {
+        output.applicationName = self->applicationName;
+        output.boostLibVersion = BOOST_LIB_VERSION;
+
+        output.appVersion.major = 0;
+        output.appVersion.minor = 5;
+    }
+
+    bool pushRequest(request_t & func) {
+        if (this->internatlTaskQueue.size() < 10) {
+            this->internatlTaskQueue.push(func);
+            return true;
+        } else {
+            return false;
+        }
     }
 };
 
-INTERFACE_GET_IMPL(EventLoopApplication, getAppDescription, appDescription_t) {
-
-}
-
 #endif // EVENTLOOPAPPLICATION_H
+
