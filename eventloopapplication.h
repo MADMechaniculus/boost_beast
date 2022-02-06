@@ -9,8 +9,36 @@
 
 #include <queue>
 #include <iostream>
+#include <fstream>
+#include <vector>
+
+#include <QFileInfo>
 
 typedef boost::function<void()> request_t;
+
+
+
+    typedef struct {
+        int16_t I;
+        int16_t Q;
+    } IQ_t;
+
+void func() {
+
+    std::ifstream stream("file/path", std::ios::binary);
+    if (stream.is_open()) {
+        // Получение размера файла ...
+        QFileInfo fInfo("file/path");
+        size_t fileSize = fInfo.size();
+        if (fileSize % sizeof(IQ_t)) {
+            std::vector<IQ_t> IQDataVector(fileSize / sizeof(IQ_t));
+            stream.read((char*)IQDataVector.data(), fileSize);
+            stream.close();
+            // Закончился процесс чтения
+        }
+    }
+
+}
 
 /**
  * @brief Очередь задач для приложения, поступающих извне
@@ -52,14 +80,17 @@ class EventLoopApplication : public AbstractApplication<initParams_t, processPar
 public:
     EventLoopApplication(int argc, char * argv[]) : AbstractApplication<initParams_t, processParams_t, stopParams_t>(argc, argv) { }
 
+    /**
+     * @brief Помещение задачи в очередь исполнения
+     * @param task Задача, запроса
+     * @return
+     */
     bool pullTask(std::function<void()> && task) {
         if (this->internatlTaskQueue.size() < 10) {
             this->internatlTaskQueue.push(task);
             return true;
-        } else {
-            // Task queue overflowed
-            return false;
         }
+        return false;
     }
 
     int init(initParams_t & params) {
