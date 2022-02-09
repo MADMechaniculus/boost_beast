@@ -15,31 +15,6 @@
 #include <QFileInfo>
 
 typedef boost::function<void()> request_t;
-
-
-
-    typedef struct {
-        int16_t I;
-        int16_t Q;
-    } IQ_t;
-
-void func() {
-
-    std::ifstream stream("file/path", std::ios::binary);
-    if (stream.is_open()) {
-        // Получение размера файла ...
-        QFileInfo fInfo("file/path");
-        size_t fileSize = fInfo.size();
-        if (fileSize % sizeof(IQ_t)) {
-            std::vector<IQ_t> IQDataVector(fileSize / sizeof(IQ_t));
-            stream.read((char*)IQDataVector.data(), fileSize);
-            stream.close();
-            // Закончился процесс чтения
-        }
-    }
-
-}
-
 /**
  * @brief Очередь задач для приложения, поступающих извне
  */
