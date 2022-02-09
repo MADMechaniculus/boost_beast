@@ -11,10 +11,10 @@
 #include <iostream>
 #include <fstream>
 #include <vector>
-
-#include <QFileInfo>
+#include <future>
 
 typedef boost::function<void()> request_t;
+
 /**
  * @brief Очередь задач для приложения, поступающих извне
  */

@@ -13,6 +13,7 @@ SOURCES += \
 INCLUDEPATH += "C:\\include\\boost_1_76_0"
 
 LIBS += -L"C:\\libs\\libboost_1.76.0" \
+        -L"C:\\libs\\boost_1.76.0" \
         -lboost_system-mgw7-mt-x32-1_76 \
         -lboost_thread-mgw7-mt-x32-1_76 \
         -lboost_filesystem-mgw7-mt-x32-1_76 \
