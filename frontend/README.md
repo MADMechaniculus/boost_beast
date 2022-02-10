@@ -1,4 +1,4 @@
-# beast-test-frontend
+# frontend
 
 ## Project setup
 ```
