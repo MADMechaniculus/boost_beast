@@ -1,24 +1,30 @@
 <template>
   <v-container>
     <v-row>
-      <v-col>
-        <v-row>
-          <v-btn> Send emergency signal </v-btn>
+      <v-col class="text-center">
+        <v-row align="center" justify="center">
+          <v-btn
+            block="true"
+            class="ma-2"
+            v-on:click="requestCardLoading = !requestCardLoading"
+          >
+            Send emergency signal
+          </v-btn>
         </v-row>
-        <v-row>
-          <v-btn v-on:click="getAppDescription">
+        <v-row align="center" justify="center">
+          <v-btn v-on:click="getAppDescription" block="true" class="ma-2">
             Get application description
           </v-btn>
         </v-row>
       </v-col>
       <v-col>
-        <v-card loading="requestCardLoading">
-          <div v-if="requestSended === true">
+        <v-card :loading="requestCardLoading">
+          <div>
             <v-card-title v-if="requestSuccess === true"
               >Device info</v-card-title
             >
             <v-card-text v-else>
-              <v-alert type="error">Reques failed!</v-alert>
+              <v-alert type="error">Request failed!</v-alert>
             </v-card-text>
           </div>
         </v-card>
@@ -57,7 +63,13 @@ export default {
         .finally(() => {
           console.log("Request ended!");
           this.requestCardLoading = false;
+          this.requestSended = false;
         });
+    },
+  },
+  calculate: {
+    getLoading: function () {
+      return this.requestCardLoading;
     },
   },
 };

@@ -37,21 +37,21 @@
     </v-app-bar>
 
     <v-main>
-      <HelloWorld v-if="selectedTab === 0"/>
+      <MainComponent v-if="selectedTab === 0"/>
       <Tranciever v-if="selectedTab === 1"/>
     </v-main>
   </v-app>
 </template>
 
 <script>
-import HelloWorld from './components/HelloWorld';
+import MainComponent from './components/MainComponent';
 import Tranciever from './components/Tranciever';
 
 export default {
   name: 'App',
 
   components: {
-    HelloWorld,
+    MainComponent,
     Tranciever
   },
 
