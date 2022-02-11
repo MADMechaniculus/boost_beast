@@ -28,9 +28,8 @@
       <v-spacer></v-spacer>
 
       <v-btn
-        href="https://github.com/vuetifyjs/vuetify/releases/latest"
-        target="_blank"
         text
+        v-on:click="selectorFunc"
       >
         <span class="mr-2">Latest Release</span>
         <v-icon>mdi-open-in-new</v-icon>
@@ -38,23 +37,37 @@
     </v-app-bar>
 
     <v-main>
-      <HelloWorld/>
+      <HelloWorld v-if="selectedTab === 0"/>
+      <Tranciever v-if="selectedTab === 1"/>
     </v-main>
   </v-app>
 </template>
 
 <script>
 import HelloWorld from './components/HelloWorld';
+import Tranciever from './components/Tranciever';
 
 export default {
   name: 'App',
 
   components: {
     HelloWorld,
+    Tranciever
   },
 
   data: () => ({
-    //
+    selectedTab: 0
   }),
+  methods: {
+
+    selectorFunc: function () {
+      if (this.selectedTab === 0) {
+        this.selectedTab = 1
+      } else {
+        this.selectedTab = 0
+      }
+    },
+
+  }
 };
 </script>
