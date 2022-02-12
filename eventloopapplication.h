@@ -6,6 +6,7 @@
 
 #include <boost/function.hpp>
 #include <boost/thread.hpp>
+#include <boost/program_options.hpp>
 
 #include <queue>
 #include <iostream>
@@ -13,24 +14,9 @@
 #include <vector>
 #include <future>
 
-typedef boost::function<void()> request_t;
+namespace po = boost::program_options;
 
-/**
- * @brief Очередь задач для приложения, поступающих извне
- */
-typedef std::queue<request_t> taskQueue_t;
-
-typedef struct {
-    uint16_t major;
-    uint16_t minor;
-} version_t;
-
-typedef struct {
-    std::string boostLibVersion;
-    std::string applicationName;
-    version_t appVersion;
-} appDescription_t;
-
+// Startup parameters =======================================
 typedef struct {
     // Some params to prepare application in init function
 } initParams_t;
@@ -42,103 +28,132 @@ typedef struct {
 typedef struct {
     // Some params to put in stop function
 } stopParams_t;
+// ==========================================================
 
-// Пример приложения, использующего очередь задач для внешнего http сервера
+/**
+ * @brief Класс приложения, которое строится на принципе бесконечного цикла
+ */
 class EventLoopApplication : public AbstractApplication<initParams_t, processParams_t, stopParams_t>
 {
-    taskQueue_t internatlTaskQueue;
-
-    std::string applicationName{"EventLoopApplication"};
-
-    boost::atomic<bool> externStop{false};
+private:
+    po::options_description options{"Application options"};
 
 public:
-    EventLoopApplication(int argc, char * argv[]) : AbstractApplication<initParams_t, processParams_t, stopParams_t>(argc, argv) { }
-
     /**
-     * @brief Помещение задачи в очередь исполнения
-     * @param task Задача, запроса
-     * @return
+     * @typedef appDescription_t
+     * @brief Структура описания приложения
      */
-    bool pullTask(std::function<void()> && task) {
-        if (this->internatlTaskQueue.size() < 10) {
-            this->internatlTaskQueue.push(task);
-            return true;
+    typedef struct {
+        std::string appName;
+        std::string boostVersion;
+        std::pair<int, int> version;
+    } appDescription_t;
+
+public:
+    EventLoopApplication(int argc, char * argv[]) : AbstractApplication<initParams_t, processParams_t, stopParams_t>(argc, argv) {
+        // Application options description generatign =============
+        this->options.add_options()
+                ("help", "Produce this message")
+                ("appName", po::value<std::string>(), "Application name")
+                ("appMajorVersion", po::value<int>(), "Application major version")
+                ("appMinorVersion", po::value<int>(), "Application minor version");
+        // ========================================================
+
+        // Parse constructor input ======================================
+        po::variables_map vm;
+        po::store(po::parse_command_line(argc, argv, this->options), vm);
+        po::notify(vm);
+        // ==============================================================
+
+        if (vm.count("appName")) {
+            this->applicationName = vm["appName"].as<std::string>();
+        } else {
+            this->applicationName = "__unnamed_app__";  //Default application name is "unnamed"
         }
-        return false;
+
+        if (vm.count("appMajorVersion")) {
+            this->applicationVersion.first = vm["appMajorVersion"].as<int>();
+        } else {
+            this->applicationVersion.first = 0;     // Default value for major version index
+        }
+
+        if (vm.count("appMinorVersion")) {
+            this->applicationVersion.second = vm["appMinorVersion"].as<int>();
+        } else {
+            this->applicationVersion.second = 1;    // Default value for minor version index
+        }
     }
 
-    int init(initParams_t & params) {
+    /**
+     * @brief Перегрузка оператора поточного вывода для вывода доступных ключей инициализации для приложения
+     * @param out Поток вывода (ostringstream)
+     * @param item Экземпляр приложения (EventLoopApplication)
+     * @return Поток вывода (ostringstream)
+     */
+    friend std::ostringstream & operator<<(std::ostringstream & out, EventLoopApplication & item) {
+        out << item.options;
+        return out;
+    }
+
+    int init(initParams_t & params) override {
         (void)params;
         return 0;
     }
 
-    int process(processParams_t & params) {
+    int process(processParams_t & params) override {
         (void)params;
 
-        int cycles = 0;
+        bool haltSnapshot{false};
 
         // Infinite loop
         while (true) {
-            // main application procedures
-            // Some hard work
-
-            boost::this_thread::sleep_for(boost::chrono::milliseconds(1000));
-
-            /// Это решение в лоб :) (вряд ли правильное и эффективное)
-            /// Задачи поступаемые от http сервера имеют самый низкий приоритет, поэтому на стороне
-            /// клиента необходимо предусмотреть ожидание ответа от сервера, потому как это может занять
-            /// много времени (пока приоритетные задачи будут выполнены)
-            if (!internatlTaskQueue.empty()) {
-                internatlTaskQueue.front()();
-                internatlTaskQueue.pop();
-            } else {
-                cycles++;
-            }
-
-            if (cycles > 5) {
-                std::cout << "Application have not requested work!\n";
+            // Halt check ================
+            haltSnapshot = this->stopFlag;
+            if (haltSnapshot)
                 break;
-            }
-        }
+            // ===========================
 
+            boost::this_thread::sleep_for(boost::chrono::milliseconds(1000));   // Some hard work
+
+            // External tasks executing ==================
+            // todo:
+            // 1. check busy flag ???
+            if (!taskQueue.empty()) {
+                this->taskQueue.front().second();
+                this->taskQueue.front().first.set_value();
+                this->taskQueue.pop();
+            }
+            // ===========================================
+        }
         return 0;
     }
 
-    /**
-     * @brief Асинхронная остановка работы приложения
-     */
-    void stopAsync() {
-        this->externStop.store(true);
-    }
-
-    /**
-     * @brief Нормальная деинициализация приложения
-     * @param params Параметры деинициализации
-     * @return
-     */
-    int stop(stopParams_t & params) {
+    int stop(stopParams_t & params) override {
         (void)params;
         return 0;
     }
 
-INTERFACES
-
-    static void getAppDescription(EventLoopApplication * self, appDescription_t & output) {
-        output.applicationName = self->applicationName;
-        output.boostLibVersion = BOOST_LIB_VERSION;
-
-        output.appVersion.major = 0;
-        output.appVersion.minor = 5;
+    pushResult_t pushRequest(request_func_t request) override {
+        pushResult_t ret;
+        if (this->taskQueue.size() < 10) {
+            task_t temp;
+            temp.second = request;
+            ret.second = temp.first.get_future();
+            this->taskQueue.push(std::move(temp));
+            ret.first = true;
+        } else {
+            ret.first = false;
+        }
+        return ret;
     }
 
-    bool pushRequest(request_t & func) {
-        if (this->internatlTaskQueue.size() < 10) {
-            this->internatlTaskQueue.push(func);
-            return true;
-        } else {
-            return false;
-        }
+    INTERFACES
+
+    static void getAppDescription(EventLoopApplication * self, appDescription_t & output) {
+        output.appName = self->applicationName;
+        output.boostVersion = BOOST_LIB_VERSION;
+        output.version.first = self->applicationVersion.first;
+        output.version.second = self->applicationVersion.second;
     }
 };
 

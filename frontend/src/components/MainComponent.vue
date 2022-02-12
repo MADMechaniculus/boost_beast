@@ -11,12 +11,12 @@
                 class="align-center"
                 dark
                 min-height="100"
-                :loading="item.inUpdate"
+                :loading="item.inUpdate ? 'warning' : ''"
               >
                 <v-card-title>
                   {{ item.data.cardName }}
                   <v-spacer></v-spacer>
-                  <v-btn icon>
+                  <v-btn icon fab :loading="item.inUpdate ? true : false">
                     <v-icon dark v-on:click="reloadDevice(item.id)">
                       mdi-reload
                     </v-icon>
@@ -131,9 +131,21 @@ export default {
       }
     },
     reloadDevice: function (id) {
-      for (let [key, item] of this.channels) {
+      let counter = 0;
+      for (let item of this.channels) {
         if (item.id === id) {
-          this.channels[key].inUpdate = true;
+          this.channels[counter].inUpdate = true;
+
+          setTimeout(
+            function () {
+              this.channels[counter].inUpdate = false;
+              this.channels[counter].data.available = true;
+            }.bind(this, counter),
+            2500
+          );
+          break;
+        } else {
+          counter++;
         }
       }
     },

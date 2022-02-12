@@ -52,7 +52,7 @@ export default {
       this.requestSended = true;
       axios
         .post("/", {
-          functionId: 0,
+          requestedFuncIndex: 0,
         })
         .then((Response) => {
           console.log(Response.data);
