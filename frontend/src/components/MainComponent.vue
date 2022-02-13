@@ -1,5 +1,5 @@
 <template>
-  <v-container>
+  <v-container style="font-family: 'pt_monoregular', monospace">
     <h1>Состояние каналов</h1>
     <v-item-group multiple>
       <v-container>
@@ -71,6 +71,8 @@
 </template>
 
 <script>
+import axios from "axios";
+
 export default {
   name: "MainComponent",
 
@@ -135,6 +137,21 @@ export default {
       for (let item of this.channels) {
         if (item.id === id) {
           this.channels[counter].inUpdate = true;
+
+          axios
+            .post("localhost:20000/", {
+              requestedFuncIndex: 1,
+              cardId: id,
+            })
+            .then((Response) => {
+              console.log(Response);
+            })
+            .catch((err) => {
+              console.log(err);
+            })
+            .finally(() => {
+              console.log("Post finish!");
+            });
 
           setTimeout(
             function () {

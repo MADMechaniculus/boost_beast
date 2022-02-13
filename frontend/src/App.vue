@@ -31,8 +31,8 @@
         text
         v-on:click="selectorFunc"
       >
-        <span class="mr-2">Latest Release</span>
-        <v-icon>mdi-open-in-new</v-icon>
+        <span class="mr-2">Test page</span>
+        <v-icon>mdi-dev-to</v-icon>
       </v-btn>
     </v-app-bar>
 
@@ -59,7 +59,6 @@ export default {
     selectedTab: 0
   }),
   methods: {
-
     selectorFunc: function () {
       if (this.selectedTab === 0) {
         this.selectedTab = 1
@@ -67,7 +66,6 @@ export default {
         this.selectedTab = 0
       }
     },
-
   }
 };
 </script>

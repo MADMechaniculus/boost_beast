@@ -173,6 +173,13 @@ int main(int argc, char* argv[])
 {
     // Init programm options ===================================================
 
+    // Debug program options ===================================================
+    std::array<const char *, 3> progOptions = { \
+        "someKey",
+        "--dir", "dist"
+    };
+    // =========================================================================
+
     po::options_description options("Available options");
     options.add_options()
             ("help", "Produce this message")
@@ -182,7 +189,11 @@ int main(int argc, char* argv[])
             ("debug", po::value<int>(), "Debug mode");
 
     po::variables_map vm;
-    po::store(po::parse_command_line(argc, argv, options), vm);
+    if (argc < 2) {
+        po::store(po::parse_command_line(progOptions.size(), (char **)progOptions.data(), options), vm);
+    } else {
+        po::store(po::parse_command_line(argc, argv, options), vm);
+    }
     po::notify(vm);
 
     if (vm.count("help")) {
@@ -192,21 +203,30 @@ int main(int argc, char* argv[])
 
     // =========================================================================
 
+    boost::thread appThread;
+
     try
     {
 
         // Constructor parameters for application ====
-        std::array<const char *, 6> conArgv = { \
+        std::array<const char *, 7> conArgv = { \
+            "someKey",
             "--appName", "Awesome application",
             "--appMajorVersion", "0",
             "--appMinorVersion", "5"
         };
         // ===========================================
 
-        EventLoopApplication application(conArgv.size() + 1, (char **)conArgv.data());
+        EventLoopApplication application(conArgv.size(), (char **)conArgv.data());
 
         CustomPOSTProcessor postProc(&application);
         CustomGETProcessor getProc(&application);
+
+        processParams_t procPlaceholder;
+
+        appThread = boost::thread([&]() {
+            application.process(procPlaceholder);
+        });
 
         net::ip::address address;
 
@@ -257,6 +277,9 @@ int main(int argc, char* argv[])
                             doc_root,
                             handler)}.detach();
         }
+
+        application.halt();
+        appThread.join();
     }
     catch (const std::exception& e)
     {

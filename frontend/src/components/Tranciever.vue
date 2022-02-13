@@ -4,7 +4,7 @@
       <v-col class="text-center">
         <v-row align="center" justify="center">
           <v-btn
-            block="true"
+            :block="true"
             class="ma-2"
             v-on:click="requestCardLoading = !requestCardLoading"
           >
@@ -12,7 +12,7 @@
           </v-btn>
         </v-row>
         <v-row align="center" justify="center">
-          <v-btn v-on:click="getAppDescription" block="true" class="ma-2">
+          <v-btn v-on:click="getAppDescription" :block="true" class="ma-2">
             Get application description
           </v-btn>
         </v-row>
@@ -20,11 +20,12 @@
       <v-col>
         <v-card :loading="requestCardLoading">
           <div>
-            <v-card-title v-if="requestSuccess === true"
-              >Device info</v-card-title
-            >
+            <v-card-title>Device info</v-card-title>
+            <v-card-text v-if="requestSuccess">
+              <pre>{{ getResponse }}</pre>
+            </v-card-text>
             <v-card-text v-else>
-              <v-alert type="error">Request failed!</v-alert>
+              <v-alert type="error">ERROR</v-alert>
             </v-card-text>
           </div>
         </v-card>
@@ -55,7 +56,9 @@ export default {
           requestedFuncIndex: 0,
         })
         .then((Response) => {
+          this.responseData = Response.data;
           console.log(Response.data);
+          this.requestSuccess = true;
         })
         .catch((err) => {
           console.log(err);
@@ -67,9 +70,12 @@ export default {
         });
     },
   },
-  calculate: {
+  computed: {
     getLoading: function () {
       return this.requestCardLoading;
+    },
+    getResponse: function () {
+      return this.responseData;
     },
   },
 };

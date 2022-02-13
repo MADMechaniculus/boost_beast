@@ -280,7 +280,7 @@ public:
         switch (req.method()) {
         case http::verb::post:
             // Custom POST processor work ===============================================================
-            processorReturn = this->postProcessorRef.process(postStream.str(), postBody);
+            processorReturn = this->postProcessorRef.process(req.body(), postBody);
 
             if (!processorReturn.first) {
                 if (!prepare()) {
