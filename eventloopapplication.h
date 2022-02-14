@@ -3,10 +3,12 @@
 
 #include "abstractapplication.h"
 #include "defines.h"
+#include "keysightcommand/keysightcommand.h"
 
 #include <boost/function.hpp>
 #include <boost/thread.hpp>
 #include <boost/program_options.hpp>
+#include <boost/asio.hpp>
 
 #include <queue>
 #include <iostream>
@@ -18,7 +20,8 @@ namespace po = boost::program_options;
 
 // Startup parameters =======================================
 typedef struct {
-    // Some params to prepare application in init function
+    std::string targetIpAddress;
+    uint16_t targetPort;
 } initParams_t;
 
 typedef struct {
@@ -38,6 +41,11 @@ class EventLoopApplication : public AbstractApplication<initParams_t, processPar
 private:
     po::options_description options{"Application options"};
 
+    boost::asio::io_context ioc;
+    boost::asio::ip::tcp::socket socket;
+    boost::asio::ip::tcp::resolver resolver;
+    boost::mutex queueMx;
+
 public:
     /**
      * @typedef appDescription_t
@@ -50,7 +58,7 @@ public:
     } appDescription_t;
 
 public:
-    EventLoopApplication(int argc, char * argv[]) : AbstractApplication<initParams_t, processParams_t, stopParams_t>(argc, argv) {
+    EventLoopApplication(int argc, char * argv[]) : AbstractApplication<initParams_t, processParams_t, stopParams_t>(argc, argv), socket(ioc), resolver(ioc) {
         // Application options description generatign =============
         this->options.add_options()
                 ("help", "Produce this message")
@@ -96,7 +104,13 @@ public:
     }
 
     int init(initParams_t & params) override {
-        (void)params;
+        try {
+            // Подключение к целевмоу устройству =================================================================================
+            boost::asio::connect(this->socket, this->resolver.resolve(params.targetIpAddress, std::to_string(params.targetPort)));
+            // ===================================================================================================================
+        }  catch (std::exception & ex) {
+            return -1;
+        }
         return 0;
     }
 
@@ -113,12 +127,9 @@ public:
                 break;
             // ===========================
 
-            boost::this_thread::sleep_for(boost::chrono::milliseconds(1000));   // Some hard work
-
             // External tasks executing ==================
-            // todo:
-            // 1. check busy flag ???
             if (!taskQueue.empty()) {
+                boost::lock_guard<boost::mutex>(this->queueMx);
                 this->taskQueue.front().second();
                 this->taskQueue.front().first.set_value();
                 this->taskQueue.pop();
@@ -139,6 +150,7 @@ public:
             task_t temp;
             temp.second = request;
             ret.second = temp.first.get_future();
+            boost::lock_guard<boost::mutex>(this->queueMx);
             this->taskQueue.push(std::move(temp));
             ret.first = true;
         } else {
@@ -154,6 +166,36 @@ public:
         output.boostVersion = BOOST_LIB_VERSION;
         output.version.first = self->applicationVersion.first;
         output.version.second = self->applicationVersion.second;
+    }
+
+    static void execOpenSwitch(EventLoopApplication * self, int bank, int channel, bool & result) {
+        std::string commandLine;
+
+        result = KeysightSCPI::SwitchDriverCmd::openSwitch(bank, channel, commandLine);
+
+        if (result) {
+            boost::asio::write(self->socket, boost::asio::buffer(commandLine, commandLine.size()));
+        }
+    }
+
+    static void execCloseSwitch(EventLoopApplication * self, int bank, int channel, bool & result) {
+        std::string commandLine;
+
+        result = KeysightSCPI::SwitchDriverCmd::closeSwitch(bank, channel, commandLine);
+
+        if (result) {
+            boost::asio::write(self->socket, boost::asio::buffer(commandLine, commandLine.size()));
+        }
+    }
+
+    static void execSetVoltage(EventLoopApplication * self, int bank, std::string volt, bool result) {
+        std::string commandLine;
+
+        result = KeysightSCPI::SwitchDriverCmd::setVoltage(bank, volt, commandLine);
+
+        if (result) {
+            boost::asio::write(self->socket, boost::asio::buffer(commandLine, commandLine.size()));
+        }
     }
 };
 

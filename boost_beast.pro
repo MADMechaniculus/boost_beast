@@ -8,7 +8,8 @@ SOURCES += \
         eventloopapplication.cpp \
         main.cpp \
         messagehandler.cpp \
-        requesthandler.cpp
+        requesthandler.cpp \
+        keysightcommand/keysightcommand.cpp
 
 DISTFILES += \
         .gitignore
@@ -18,7 +19,8 @@ HEADERS += \
         defines.h \
         eventloopapplication.h \
         messagehandler.h \
-        requesthandler.h
+        requesthandler.h \
+        keysightcommand/keysightcommand.h
 
 win32 {
 INCLUDEPATH += "C:\\include\\boost_1_76_0"

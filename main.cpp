@@ -63,6 +63,66 @@ public:
 
         pushResult_t pushReturn;
 
+        auto wrapperOpenSwitch = [&]() {
+            int bank = obj["bank"].as_int64();
+            int channel = obj["channel"].as_int64();
+
+            bool execRet{false};
+
+            pushReturn = appPtr->pushRequest(std::bind(&EventLoopApplication::execOpenSwitch, appPtr, bank, channel, std::ref(execRet)));
+
+            if (!pushReturn.first) {
+                ret.first = false;
+            }
+
+            pushReturn.second.get();
+
+            if (execRet)
+                answerJson["retCode"] = (int64_t)0;
+            else
+                answerJson["retCode"] = (int64_t)-1;
+        };
+
+        auto wrapperCloseSwitch = [&]() {
+            int bank = obj["bank"].as_int64();
+            int channel = obj["channel"].as_int64();
+
+            bool execRet{false};
+
+            pushReturn = appPtr->pushRequest(std::bind(&EventLoopApplication::execCloseSwitch, appPtr, bank, channel, std::ref(execRet)));
+
+            if (!pushReturn.first) {
+                ret.first = false;
+            }
+
+            pushReturn.second.get();
+
+            if (execRet)
+                answerJson["retCode"] = (int64_t)0;
+            else
+                answerJson["retCode"] = (int64_t)-1;
+        };
+
+        auto wrapperSetVoltage = [&]() {
+            int bank = obj["bank"].as_int64();
+            std::string voltage = obj["voltage"].as_string().c_str();
+
+            bool execRet{false};
+
+            pushReturn = appPtr->pushRequest(std::bind(&EventLoopApplication::execSetVoltage, appPtr, bank, voltage, std::ref(execRet)));
+
+            if (!pushReturn.first) {
+                ret.first = false;
+            }
+
+            pushReturn.second.get();
+
+            if (execRet)
+                answerJson["retCode"] = (int64_t)0;
+            else
+                answerJson["retCode"] = (int64_t)-1;
+        };
+
         if (obj["requestedFuncIndex"].is_int64()) {
             switch (obj["requestedFuncIndex"].as_int64()) {
             case 0:
@@ -78,6 +138,21 @@ public:
                 answerJson["boostVersion"] = appDescription.boostVersion;
                 answerJson["appName"] = appDescription.appName;
                 answerJson["retCode"] = (int64_t)0;
+
+                break;
+            case 1:
+
+                wrapperOpenSwitch();
+
+                break;
+            case 2:
+
+                wrapperCloseSwitch();
+
+                break;
+            case 3:
+
+                wrapperSetVoltage();
 
                 break;
             default:
@@ -186,6 +261,8 @@ int main(int argc, char* argv[])
             ("listen", po::value<std::string>(), "Server listening IP family")
             ("port", po::value<uint16_t>(), "Server listening port")
             ("dir", po::value<std::string>(), "Server working directory")
+            ("targetIP", po::value<std::string>(), "Target device IP")
+            ("targetPORT", po::value<uint16_t>(), "Target device port")
             ("debug", po::value<int>(), "Debug mode");
 
     po::variables_map vm;
@@ -217,12 +294,32 @@ int main(int argc, char* argv[])
         };
         // ===========================================
 
+        initParams_t initP;
+
+        if (vm.count("targetIP")) {
+            initP.targetIpAddress = vm["targetIP"].as<std::string>();
+        } else {
+            initP.targetIpAddress = "172.16.13.46";
+            std::cout << "Target device set to default IP: 172.16.13.46" << std::endl;
+        }
+
+        if (vm.count("targetPORT")) {
+            initP.targetPort = vm["targetPORT"].as<uint16_t>();
+        } else {
+            initP.targetPort = 5025;
+            std::cout << "Target device set to default PORT: 5025" << std::endl;
+        }
+
         EventLoopApplication application(conArgv.size(), (char **)conArgv.data());
 
         CustomPOSTProcessor postProc(&application);
         CustomGETProcessor getProc(&application);
 
         processParams_t procPlaceholder;
+
+        if (application.init(initP) != 0) {
+            throw std::runtime_error("Error on init application!");
+        }
 
         appThread = boost::thread([&]() {
             application.process(procPlaceholder);
@@ -278,6 +375,7 @@ int main(int argc, char* argv[])
                             handler)}.detach();
         }
 
+        std::cout << "Halt application ..." << std::endl;
         application.halt();
         appThread.join();
     }
