@@ -15,7 +15,8 @@ SOURCES += \
         userpostproc.cpp
 
 DISTFILES += \
-        .gitignore
+        .gitignore \
+        README.md
 
 HEADERS += \
         abstractapplication.h \
