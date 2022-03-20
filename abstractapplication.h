@@ -3,6 +3,11 @@
 
 #include <boost/program_options.hpp>
 #include <boost/atomic.hpp>
+#include <boost/memory_order.hpp>
+
+#include "defines.h"
+
+#include <queue>
 
 #define INTERFACES \
     public:
@@ -14,14 +19,16 @@
 template<class InitParams, class ProcessParams, class StopParams>
 class AbstractApplication
 {
-private:
-    boost::atomic<bool> isBusy;
+protected:
+    boost::atomic<bool> isBusy{false};
+    boost::atomic<bool> stopFlag{false};
+    std::queue<task_t> taskQueue;
+
+    std::string applicationName;
+    std::pair<int, int> applicationVersion;
 
 public:
-    AbstractApplication(int argc, char * argv[]) {
-        (void)argc;
-        (void)argv;
-    };
+    AbstractApplication(void) {};
 
     /**
      * @brief
@@ -38,9 +45,43 @@ public:
         return ret;
     }
 
+    /**
+     * @brief Прерывание работы приложения, этот флаг должен учитываться в
+     * главной исполняющей функции приложения (process)
+     */
+    void halt(void) {
+        this->stopFlag.store(true);
+    }
+
+    /**
+     * @brief Инициализация
+     * @param params Параметры инициализации
+     * @return Результат процесса инициализации
+     */
     virtual int init(InitParams &params) =0;
+
+    /**
+     * @brief Функция исполнения функционала приложения. В теории, может содержать всё что угодно.
+     * @param params Параметры исполнения
+     * @return Код исполнения
+     */
     virtual int process(ProcessParams &params) =0;
+
+    /**
+     * @brief Функция деинициализации (завершения работы приложения)
+     * @param params Параметры деинициализации
+     * @return Код исполнения
+     */
     virtual int stop(StopParams &params) =0;
+
+    /**
+     * @brief Добавление запроса в очередь сполнения приложения
+     * @param request Функция, переданная через bind содержщая запрос
+     * @return Структуру с результатом добавления запроса в очередь:
+     * - bool - флаг успешности процесса добавления
+     * - std::future - объект future для отслеживания состояния запроса
+     */
+    virtual pushResult_t pushRequest(request_func_t request) =0;
 };
 
 #endif // ABSTRACTAPPLICATION_H

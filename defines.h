@@ -2,41 +2,36 @@
 #define DEFINES_H
 
 #include <string>
+#include <future>
+#include <queue>
 
-#define INTERFACE_SET_IMPL(classname, method, input_t) \
-    std::string classname::method::name = ""#method""; \
-    std::string classname::method::type = "interface_getter"; \
-    void classname::method::__call(input_t & input)
+/**
+ * @brief Барьерный промис
+ */
+typedef std::promise<void> barrierPromise_t;
 
-#define INTERFACE_GET_IMPL(classname, method, output_t) \
-    std::string classname::method::name = ""#method""; \
-    std::string classname::method::type = "interface_getter"; \
-    void classname::method::__call(output_t & output)
+typedef std::future<void> barrierFuture_t;
 
-#define INTERFACE_IMPL(classname, method, input_t, output_t) \
-    std::string classname::method::name = ""#method""; \
-    std::string classname::method::type = "interface_getter"; \
-    void classname::method::__call(input_t & input, output_t & output)
+/**
+ * @brief Пара <bool, промис> для возврата из функции pushRequest
+ */
+typedef std::pair<bool, barrierFuture_t> pushResult_t;
 
-#define INTERFACE_BODY(method) \
-    class method { \
-    public: \
-        static std::string name; \
-        static std::string type;
+/**
+ * @brief Тип функции, который может быть помещён в качестве запроса
+ */
+typedef std::function<void()> request_func_t;
 
-#define INTERFACE_METHOD_DECL(method, out_construction, input_construction) \
-    INTERFACE_BODY(method); \
-    static void __call(input_construction & input, out_construction & output); \
-};
+/**
+ * @brief Структура для ранения события, которое должно произойти после того, как приложение выполнит запрос,
+ * привязанный к future в данной структуре
+ */
+typedef std::pair<std::future<void>, std::function<void()>> response_t;
 
-#define INTERFACE_GET_DECL(method, out_construction) \
-    INTERFACE_BODY(method) \
-    static void __call(out_construction & output); \
-};
-
-#define INTERFACE_SET_DECL(method, input_construction) \
-    INTERFACE_BODY(method) \
-    static void __call(input_construction & input); \
-};
+/**
+ * @brief task_t Структура для хранения запроса (задачи) для приложения,
+ * который должен быть выполнен в отложенном режиме
+ */
+typedef std::pair<std::promise<void>, request_func_t> task_t;
 
 #endif // DEFINES_H

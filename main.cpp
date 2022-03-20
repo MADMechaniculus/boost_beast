@@ -1,22 +1,3 @@
-//
-// Copyright (c) 2016-2019 Vinnie Falco (vinnie dot falco at gmail dot com)
-//
-// Distributed under the Boost Software License, Version 1.0. (See accompanying
-// file LICENSE_1_0.txt or copy at http://www.boost.org/LICENSE_1_0.txt)
-//
-// Official repository: https://github.com/boostorg/beast
-//
-
-//------------------------------------------------------------------------------
-//
-// Example: HTTP server, synchronous
-//
-//------------------------------------------------------------------------------
-
-#define SERVER_VERSION_MAJOR 0
-#define SERVER_VERSION_MINOR 3
-#define APPLICATION_NAME "Boost beast testing server application"
-
 #include <boost/beast/core.hpp>
 #include <boost/beast/http.hpp>
 #include <boost/beast/version.hpp>
@@ -24,6 +5,8 @@
 #include <boost/config.hpp>
 #include <boost/filesystem.hpp>
 #include <boost/json/src.hpp>
+#include <boost/program_options.hpp>
+
 #include <cstdlib>
 #include <iostream>
 #include <memory>
@@ -32,86 +15,18 @@
 #include <fstream>
 
 #include "requesthandler.h"
-#include "messagehandler.h"
 #include "eventloopapplication.h"
+#include "userpostproc.h"
+#include "usergetproc.h"
 
 namespace beast = boost::beast;         // from <boost/beast.hpp>
 namespace http = beast::http;           // from <boost/beast/http.hpp>
 namespace net = boost::asio;            // from <boost/asio.hpp>
+namespace po = boost::program_options;
 using tcp = boost::asio::ip::tcp;       // from <boost/asio/ip/tcp.hpp>
 
-//------------------------------------------------------------------------------
-// Определение кастомных процессоров типов запросов
-
-class CustomPOSTProcessor : public AbstractPOSTProc
-{
-    EventLoopApplication * appPtr;
-public:
-    CustomPOSTProcessor(EventLoopApplication * app) : AbstractPOSTProc(), appPtr(app) {}
-
-    bool process(std::string targetJson, http::file_body::value_type & ansBody) {
-
-        std::cout << "[POST]\n";
-        std::cout << targetJson << std::endl;
-
-        boost::json::object answerJson;
-
-        boost::json::object obj;
-        boost::json::value value = boost::json::parse(targetJson);
-        obj = value.as_object();
-
-        answerJson["retCode"] = 0;
-
-        if (obj["requestedFuncIndex"].is_int64()) {
-            switch (obj["requestedFuncIndex"].as_int64()) {
-            case 0:
-
-                answerJson["serverVersion"] = { {"major", SERVER_VERSION_MAJOR}, {"minor", SERVER_VERSION_MINOR} };
-                answerJson["boostVersion"] = BOOST_LIB_VERSION;
-                answerJson["appName"] = APPLICATION_NAME;
-                answerJson["retCode"] = (int64_t)0;
-
-                break;
-            default:
-                answerJson["retCode"] = (int64_t)-1;
-                break;
-            }
-
-            boost::system::error_code ec;
-            std::string serialized = boost::json::serialize(answerJson);
-            std::string path = "";
-            std::ofstream simpleJson("./simple.json");
-            if (simpleJson.is_open()) {
-                simpleJson.write(serialized.c_str(), serialized.size());
-                simpleJson.close();
-
-                boost::filesystem::path filePath("./simple.json");
-                path = boost::filesystem::absolute(filePath).generic_string();
-                ansBody.open(path.c_str(), beast::file_mode::scan, ec);
-            } else {
-                return false;
-            }
-            return true;
-        }
-        return false;
-    }
-};
-
-class CustomGETProcessor : public AbstractGETProc
-{
-    EventLoopApplication * appPtr;
-public:
-    CustomGETProcessor(EventLoopApplication * app) : AbstractGETProc(), appPtr(app) {}
-
-    bool process(std::string target, http::file_body::value_type & ansBody) {
-        std::cout << "Call from " << __PRETTY_FUNCTION__ << std::endl;
-        std::cout << "Target: " << target << std::endl;
-        return false;   // always false, for default static response
-    }
-};
-
 // Определение типа используемого обрабочика запросов
-typedef RequestHandler<CustomPOSTProcessor, CustomGETProcessor> reqHndlr_t;
+typedef HTTPHandler<CustomPOSTProcessor, CustomGETProcessor> reqHndlr_t;
 
 // Report a failure
 void fail(beast::error_code ec, char const* what)
@@ -167,26 +82,103 @@ void do_session<reqHndlr_t>(tcp::socket& socket, std::shared_ptr<std::string con
 
 int main(int argc, char* argv[])
 {
-    try
-    {
-        // Check command line arguments.
-        if (argc != 4)
-        {
-            std::cerr <<
-                         "Usage: http-server-sync <address> <port> <doc_root>\n" <<
-                         "Example:\n" <<
-                         "    http-server-sync 0.0.0.0 8080 .\n";
-            return EXIT_FAILURE;
+    // Init programm options ===================================================
+
+    po::options_description options("Available options");
+    options.add_options()
+            ("help", "Produce this message")
+            ("listen", po::value<std::string>(), "Server listening IP family")
+            ("port", po::value<uint16_t>(), "Server listening port")
+            ("dir", po::value<std::string>(), "Server working directory")
+            ("targetIP", po::value<std::string>(), "Target device IP")
+            ("targetPORT", po::value<uint16_t>(), "Target device port")
+            ("debug", po::value<int>(), "Debug mode");
+
+    po::variables_map vm;
+    po::store(po::parse_command_line(argc, argv, options), vm);
+    po::notify(vm);
+
+    if (vm.count("help")) {
+        std::cout << options << std::endl;
+        return 0;
+    }
+
+    // Application init =================================================================
+    boost::thread appThread;
+
+    CustomPOSTProcessor postProc;
+    CustomGETProcessor getProc;
+
+    processParams_t procPlaceholder;
+
+    // Constructor parameters for application ====
+    std::array<const char *, 7> conArgv = { \
+        "someKey",
+        "--appName", "Awesome application",
+        "--appMajorVersion", "0",
+        "--appMinorVersion", "5"
+    };
+
+    initParams_t initP;
+    // ===========================================
+
+    net::ip::address address;
+    unsigned short port{0};
+    std::shared_ptr<std::string> doc_root;
+    EventLoopApplication application(conArgv.size(), (char **)conArgv.data());
+
+    try {
+        if (vm.count("targetIP")) {
+            initP.targetIpAddress = vm["targetIP"].as<std::string>();
+        } else {
+            initP.targetIpAddress = "172.16.13.46";
+            std::cout << "Target device set to default IP: 172.16.13.46" << std::endl;
         }
 
-        EventLoopApplication application(argc, argv);
+        if (vm.count("targetPORT")) {
+            initP.targetPort = vm["targetPORT"].as<uint16_t>();
+        } else {
+            initP.targetPort = 5025;
+            std::cout << "Target device set to default PORT: 5025" << std::endl;
+        }
 
-        CustomPOSTProcessor postProc(&application);
-        CustomGETProcessor getProc(&application);
+        postProc.connectApp(&application);
+        getProc.connectApp(&application);
 
-        auto const address = net::ip::make_address(argv[1]);
-        auto const port = static_cast<unsigned short>(std::atoi(argv[2]));
-        auto const doc_root = std::make_shared<std::string>(argv[3]);
+        if (application.init(initP) != 0) {
+            throw std::runtime_error("Error on init application!");
+        }
+
+        appThread = boost::thread([&]() {
+            application.process(procPlaceholder);
+        });
+    }  catch (std::exception &ex) {
+        std::cout << "Tarminate called after: " << ex.what() << std::endl;
+        std::exit(EXIT_FAILURE);
+    }
+
+    try
+    {
+        if (vm.count("listen")) {
+            address = net::ip::make_address(vm["listen"].as<std::string>());
+        } else {
+            address = net::ip::make_address("0.0.0.0");
+            std::cout << "Running on default address: 0.0.0.0" << std::endl;
+        }
+
+        if (vm.count("port")) {
+            port = vm["port"].as<unsigned short>();
+        } else {
+            port = 8080;
+            std::cout << "Running in default port: 8080" << std::endl;
+        }
+
+        if (vm.count("dir")) {
+            doc_root = std::make_shared<std::string>(vm["dir"].as<std::string>());
+        } else {
+            doc_root = std::make_shared<std::string>(".");
+            std::cout << "Running in default directory: '.'" << std::endl;
+        }
 
         reqHndlr_t handler(postProc, getProc);
 
@@ -214,8 +206,12 @@ int main(int argc, char* argv[])
     catch (const std::exception& e)
     {
         std::cerr << "Error: " << e.what() << std::endl;
-        return EXIT_FAILURE;
+        std::exit(EXIT_FAILURE);
     }
+
+    std::cout << "Halt application ..." << std::endl;
+    application.halt();
+    appThread.join();
 
     return EXIT_SUCCESS;
 }
