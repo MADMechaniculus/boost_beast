@@ -1,18 +1,3 @@
-//
-// Copyright (c) 2016-2019 Vinnie Falco (vinnie dot falco at gmail dot com)
-//
-// Distributed under the Boost Software License, Version 1.0. (See accompanying
-// file LICENSE_1_0.txt or copy at http://www.boost.org/LICENSE_1_0.txt)
-//
-// Official repository: https://github.com/boostorg/beast
-//
-
-//------------------------------------------------------------------------------
-//
-// Example: HTTP server, synchronous
-//
-//------------------------------------------------------------------------------
-
 #include <boost/beast/core.hpp>
 #include <boost/beast/http.hpp>
 #include <boost/beast/version.hpp>
@@ -21,6 +6,7 @@
 #include <boost/filesystem.hpp>
 #include <boost/json/src.hpp>
 #include <boost/program_options.hpp>
+
 #include <cstdlib>
 #include <iostream>
 #include <memory>
@@ -29,8 +15,9 @@
 #include <fstream>
 
 #include "requesthandler.h"
-#include "messagehandler.h"
 #include "eventloopapplication.h"
+#include "userpostproc.h"
+#include "usergetproc.h"
 
 namespace beast = boost::beast;         // from <boost/beast.hpp>
 namespace http = beast::http;           // from <boost/beast/http.hpp>
@@ -38,159 +25,8 @@ namespace net = boost::asio;            // from <boost/asio.hpp>
 namespace po = boost::program_options;
 using tcp = boost::asio::ip::tcp;       // from <boost/asio/ip/tcp.hpp>
 
-//------------------------------------------------------------------------------
-// Определение кастомных процессоров типов запросов
-
-class CustomPOSTProcessor : public AbstractPOSTProc
-{
-    EventLoopApplication * appPtr;
-public:
-    CustomPOSTProcessor(EventLoopApplication * app) : AbstractPOSTProc(), appPtr(app) {}
-
-    processorProcRet_t process(std::string targetJson, http::string_body::value_type & ansBody) override {
-        processorProcRet_t ret;
-        ret.first = false;
-
-        boost::json::object answerJson;
-
-        boost::json::object obj;
-        boost::json::value value = boost::json::parse(targetJson);
-        obj = value.as_object();
-
-        answerJson["retCode"] = 0;
-
-        EventLoopApplication::appDescription_t appDescription;
-
-        pushResult_t pushReturn;
-
-        auto wrapperOpenSwitch = [&]() {
-            int bank = obj["bank"].as_int64();
-            int channel = obj["channel"].as_int64();
-
-            bool execRet{false};
-
-            pushReturn = appPtr->pushRequest(std::bind(&EventLoopApplication::execOpenSwitch, appPtr, bank, channel, std::ref(execRet)));
-
-            if (!pushReturn.first) {
-                ret.first = false;
-            }
-
-            pushReturn.second.get();
-
-            if (execRet)
-                answerJson["retCode"] = (int64_t)0;
-            else
-                answerJson["retCode"] = (int64_t)-1;
-        };
-
-        auto wrapperCloseSwitch = [&]() {
-            int bank = obj["bank"].as_int64();
-            int channel = obj["channel"].as_int64();
-
-            bool execRet{false};
-
-            pushReturn = appPtr->pushRequest(std::bind(&EventLoopApplication::execCloseSwitch, appPtr, bank, channel, std::ref(execRet)));
-
-            if (!pushReturn.first) {
-                ret.first = false;
-            }
-
-            pushReturn.second.get();
-
-            if (execRet)
-                answerJson["retCode"] = (int64_t)0;
-            else
-                answerJson["retCode"] = (int64_t)-1;
-        };
-
-        auto wrapperSetVoltage = [&]() {
-            int bank = obj["bank"].as_int64();
-            std::string voltage = obj["voltage"].as_string().c_str();
-
-            bool execRet{false};
-
-            pushReturn = appPtr->pushRequest(std::bind(&EventLoopApplication::execSetVoltage, appPtr, bank, voltage, std::ref(execRet)));
-
-            if (!pushReturn.first) {
-                ret.first = false;
-            }
-
-            pushReturn.second.get();
-
-            if (execRet)
-                answerJson["retCode"] = (int64_t)0;
-            else
-                answerJson["retCode"] = (int64_t)-1;
-        };
-
-        if (obj["requestedFuncIndex"].is_int64()) {
-            switch (obj["requestedFuncIndex"].as_int64()) {
-            case 0:
-
-                pushReturn = appPtr->pushRequest(std::bind(&EventLoopApplication::getAppDescription, appPtr, std::ref(appDescription)));
-
-                if (!pushReturn.first)
-                    ret.first = false;
-
-                pushReturn.second.get();
-
-                answerJson["appVersion"] = { {"major", appDescription.version.first}, {"minor", appDescription.version.second} };
-                answerJson["boostVersion"] = appDescription.boostVersion;
-                answerJson["appName"] = appDescription.appName;
-                answerJson["retCode"] = (int64_t)0;
-
-                break;
-            case 1:
-
-                wrapperOpenSwitch();
-
-                break;
-            case 2:
-
-                wrapperCloseSwitch();
-
-                break;
-            case 3:
-
-                wrapperSetVoltage();
-
-                break;
-            default:
-                answerJson["retCode"] = (int64_t)-1;
-                break;
-            }
-
-            ret.second = boost::json::serialize(answerJson);
-            ansBody = ret.second;
-            ret.first = true;
-
-            return ret;
-        }
-        return ret;
-    }
-};
-
-class CustomGETProcessor : public AbstractGETProc
-{
-    EventLoopApplication * appPtr;
-public:
-    CustomGETProcessor(EventLoopApplication * app) : AbstractGETProc(), appPtr(app) {}
-
-    processorProcRet_t process(std::string target, http::file_body::value_type & ansBody) override {
-        (void)appPtr;
-        (void)ansBody;
-
-        processorProcRet_t ret;
-        ret.first = false;
-
-        std::cout << "Call from " << __PRETTY_FUNCTION__ << std::endl;
-        std::cout << "Target: " << target << std::endl;
-        return ret;   // always false, for default static response
-    }
-};
-
 // Определение типа используемого обрабочика запросов
-typedef RequestHandler<CustomPOSTProcessor, CustomGETProcessor> reqHndlr_t;
+typedef HTTPHandler<CustomPOSTProcessor, CustomGETProcessor> reqHndlr_t;
 
 // Report a failure
 void fail(beast::error_code ec, char const* what)
@@ -248,13 +84,6 @@ int main(int argc, char* argv[])
 {
     // Init programm options ===================================================
 
-    // Debug program options ===================================================
-    std::array<const char *, 3> progOptions = { \
-        "someKey",
-        "--dir", "dist"
-    };
-    // =========================================================================
-
     po::options_description options("Available options");
     options.add_options()
             ("help", "Produce this message")
@@ -266,11 +95,7 @@ int main(int argc, char* argv[])
             ("debug", po::value<int>(), "Debug mode");
 
     po::variables_map vm;
-    if (argc < 2) {
-        po::store(po::parse_command_line(progOptions.size(), (char **)progOptions.data(), options), vm);
-    } else {
-        po::store(po::parse_command_line(argc, argv, options), vm);
-    }
+    po::store(po::parse_command_line(argc, argv, options), vm);
     po::notify(vm);
 
     if (vm.count("help")) {
@@ -278,24 +103,31 @@ int main(int argc, char* argv[])
         return 0;
     }
 
-    // =========================================================================
-
+    // Application init =================================================================
     boost::thread appThread;
 
-    try
-    {
+    CustomPOSTProcessor postProc;
+    CustomGETProcessor getProc;
 
-        // Constructor parameters for application ====
-        std::array<const char *, 7> conArgv = { \
-            "someKey",
-            "--appName", "Awesome application",
-            "--appMajorVersion", "0",
-            "--appMinorVersion", "5"
-        };
-        // ===========================================
+    processParams_t procPlaceholder;
 
-        initParams_t initP;
+    // Constructor parameters for application ====
+    std::array<const char *, 7> conArgv = { \
+        "someKey",
+        "--appName", "Awesome application",
+        "--appMajorVersion", "0",
+        "--appMinorVersion", "5"
+    };
 
+    initParams_t initP;
+    // ===========================================
+
+    net::ip::address address;
+    unsigned short port{0};
+    std::shared_ptr<std::string> doc_root;
+    EventLoopApplication application(conArgv.size(), (char **)conArgv.data());
+
+    try {
         if (vm.count("targetIP")) {
             initP.targetIpAddress = vm["targetIP"].as<std::string>();
         } else {
@@ -310,12 +142,8 @@ int main(int argc, char* argv[])
             std::cout << "Target device set to default PORT: 5025" << std::endl;
         }
 
-        EventLoopApplication application(conArgv.size(), (char **)conArgv.data());
-
-        CustomPOSTProcessor postProc(&application);
-        CustomGETProcessor getProc(&application);
-
-        processParams_t procPlaceholder;
+        postProc.connectApp(&application);
+        getProc.connectApp(&application);
 
         if (application.init(initP) != 0) {
             throw std::runtime_error("Error on init application!");
@@ -324,9 +152,13 @@ int main(int argc, char* argv[])
         appThread = boost::thread([&]() {
             application.process(procPlaceholder);
         });
+    }  catch (std::exception &ex) {
+        std::cout << "Tarminate called after: " << ex.what() << std::endl;
+        std::exit(EXIT_FAILURE);
+    }
 
-        net::ip::address address;
-
+    try
+    {
         if (vm.count("listen")) {
             address = net::ip::make_address(vm["listen"].as<std::string>());
         } else {
@@ -334,16 +166,12 @@ int main(int argc, char* argv[])
             std::cout << "Running on default address: 0.0.0.0" << std::endl;
         }
 
-        unsigned short port = 0;
-
         if (vm.count("port")) {
             port = vm["port"].as<unsigned short>();
         } else {
             port = 8080;
             std::cout << "Running in default port: 8080" << std::endl;
         }
-
-        std::shared_ptr<std::string> doc_root;
 
         if (vm.count("dir")) {
             doc_root = std::make_shared<std::string>(vm["dir"].as<std::string>());
@@ -374,16 +202,16 @@ int main(int argc, char* argv[])
                             doc_root,
                             handler)}.detach();
         }
-
-        std::cout << "Halt application ..." << std::endl;
-        application.halt();
-        appThread.join();
     }
     catch (const std::exception& e)
     {
         std::cerr << "Error: " << e.what() << std::endl;
-        return EXIT_FAILURE;
+        std::exit(EXIT_FAILURE);
     }
+
+    std::cout << "Halt application ..." << std::endl;
+    application.halt();
+    appThread.join();
 
     return EXIT_SUCCESS;
 }

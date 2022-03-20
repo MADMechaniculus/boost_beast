@@ -5,22 +5,29 @@ CONFIG += qt
 
 SOURCES += \
         abstractapplication.cpp \
+        abstractgetproc.cpp \
+        abstractpostproc.cpp \
         eventloopapplication.cpp \
         main.cpp \
-        messagehandler.cpp \
         requesthandler.cpp \
-        keysightcommand/keysightcommand.cpp
+        keysightcommand/keysightcommand.cpp \
+        usergetproc.cpp \
+        userpostproc.cpp
 
 DISTFILES += \
         .gitignore
 
 HEADERS += \
         abstractapplication.h \
+        abstractgetproc.h \
+        abstractpostproc.h \
         defines.h \
         eventloopapplication.h \
-        messagehandler.h \
+        proctypes.h \
         requesthandler.h \
-        keysightcommand/keysightcommand.h
+        keysightcommand/keysightcommand.h \
+        usergetproc.h \
+        userpostproc.h
 
 win32 {
 INCLUDEPATH += "C:\\include\\boost_1_76_0"

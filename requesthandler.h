@@ -7,38 +7,18 @@
 #include <boost/asio/ip/tcp.hpp>
 #include <boost/config.hpp>
 #include <boost/filesystem.hpp>
+
 #include <cstdlib>
 #include <memory>
 #include <string>
 #include <fstream>
+#include <iostream>
 
-#include "messagehandler.h"
+#include "abstractpostproc.h"
+#include "abstractgetproc.h"
 
-#define PRINT_REQ_TARGET_STRING 0
-
-namespace beast = boost::beast;         // from <boost/beast.hpp>
-namespace http = beast::http;           // from <boost/beast/http.hpp>
-namespace net = boost::asio;            // from <boost/asio.hpp>
-
-typedef std::pair<bool, std::string> processorProcRet_t;
-
-/**
- * @brief Абстракция процессора POST запросов
- */
-class AbstractPOSTProc {
-public:
-    AbstractPOSTProc() {};
-    virtual processorProcRet_t process(std::string target, http::string_body::value_type & ansBody) = 0;
-};
-
-/**
- * @brief Абстракция процессора GET запросов
- */
-class AbstractGETProc {
-public:
-    AbstractGETProc() {};
-    virtual processorProcRet_t process(std::string target, http::file_body::value_type & ansBody) = 0;
-};
+namespace beast = boost::beast;
+namespace net = boost::asio;
 
 /**
  * @brief Базовый класс обработчика http запросов
@@ -50,10 +30,27 @@ private:
     POSTPROC & postProcessorRef;
     GETPROC & getProcessorRef;
 
+    /**
+     * @brief Генератор константных ответов
+     */
     class ResponseGenerator {
     public:
+        /**
+         * @enum FAST_REQUESTS
+         * @brief Перечисление возможных ошибок при подготовке тела
+         */
+        enum FAST_REQUESTS {
+            IllegalRequestTarget,
+            NotFound,
+            ServerError,
+            __undef
+        };
+
         ResponseGenerator() {}
 
+        /**
+         * @brief Генератор bad_request ответа
+         */
         template<class Body, class Allocator>
         static http::response<http::string_body> bad_request(http::request<Body, http::basic_fields<Allocator>>& req,
                                                              beast::string_view why)
@@ -67,6 +64,9 @@ private:
             return res;
         };
 
+        /**
+         * @brief Генератор ответа 404
+         */
         template<class Body, class Allocator>
         static http::response<http::string_body> not_found(http::request<Body, http::basic_fields<Allocator>>& req,
                                                            beast::string_view target) {
@@ -79,6 +79,9 @@ private:
             return res;
         };
 
+        /**
+         * @brief Генератор ответа server_error
+         */
         template<class Body, class Allocator>
         static http::response<http::string_body> server_error(http::request<Body, http::basic_fields<Allocator>>& req,
                                                               beast::string_view what) {
@@ -161,6 +164,11 @@ protected:
     }
 
 public:
+    /**
+     * @brief Конструктор класса
+     * @param postRef Ссылка на пользовательский обработчик POST запросов
+     * @param getRef Ссылка на пользовательский обработкич GET азпросов
+     */
     RequestHandler(POSTPROC & postRef, GETPROC & getRef) : postProcessorRef(postRef), getProcessorRef(getRef) { };
 
     // This is the C++11 equivalent of a generic lambda.
@@ -194,6 +202,12 @@ public:
         }
     };
 
+    /**
+     * @brief Функциональный оператор
+     * @param doc_root Корневой каталог обработчика запросов
+     * @param req HTTP запрос от клиента
+     * @param send Функция отправки ответа на поступивший запрос (для того, чтобы не использовать логику очередей и определения какому клиенту что отдавать)
+     */
     template<class Body, class Allocator, class Send>
     void operator()(beast::string_view doc_root,
                     http::request<Body, http::basic_fields<Allocator>>&& req,
@@ -206,32 +220,21 @@ public:
         bool checkFlag = false;
         std::ostringstream postStream;
 
-        /**
-         * @enum FAST_REQUESTS
-         * @brief Перечисление возможных ошибок при подготовке тела
-         */
-        enum FAST_REQUESTS {
-            IllegalRequestTarget,
-            NotFound,
-            ServerError,
-            __undef
-        };
-
         // Обработчик ошибки пдготовки запроса
         auto processError = [&]() {
-            std::cout << "processError()" << std::endl;
+            //            std::cout << "processError()" << std::endl;
             if (checkFlag)
-                return FAST_REQUESTS::IllegalRequestTarget;
+                return ResponseGenerator::FAST_REQUESTS::IllegalRequestTarget;
             if(ec == beast::errc::no_such_file_or_directory)
-                return FAST_REQUESTS::NotFound;
+                return ResponseGenerator::FAST_REQUESTS::NotFound;
             if(ec)
-                return FAST_REQUESTS::ServerError;
-            return FAST_REQUESTS::__undef;
+                return ResponseGenerator::FAST_REQUESTS::ServerError;
+            return ResponseGenerator::FAST_REQUESTS::__undef;
         };
 
         // Проверка запрашиваемого target
         auto targetCheck = [&]() {
-            std::cout << "targetCheck()" << std::endl;
+            //            std::cout << "targetCheck()" << std::endl;
             return (req.target().empty() ||
                     req.target()[0] != '/' ||
                     req.target().find("..") != beast::string_view::npos);
@@ -239,7 +242,7 @@ public:
 
         // Подготовка тела запроса
         auto prepare = [&]() {
-            std::cout << "prepare()" << std::endl;
+            //            std::cout << "prepare()" << std::endl;
             if ((checkFlag = targetCheck()) == true) {
                 return false;
             }
@@ -263,18 +266,7 @@ public:
             return true;
         };
 
-        /// [TODO]:
-        /// - при обработке запроса, мы проверяем его корректность
-        /// - после этого, происходит ветвление по типу запроса
-        /// - при ветвлении вызываются кастомные обработчики, которые указываются пользователем
-        /// - после выполнения ветвления и возврата результата обработчиков вызывается функция отправки ответа
-
-#if PRINT_REQ_TARGET_STRING == 1
-        // Вывод содержимого target поступившего запроса
-        std::cout << http::to_string(req.method()) << std::endl;
-        std::cout << req.target() << std::endl;
-#endif
-
+        // Результат обработки запроса пользовательским обработчиком
         processorProcRet_t processorReturn;
 
         switch (req.method()) {
@@ -285,10 +277,10 @@ public:
             if (!processorReturn.first) {
                 if (!prepare()) {
                     switch (processError()) {
-                    case FAST_REQUESTS::IllegalRequestTarget:
+                    case ResponseGenerator::FAST_REQUESTS::IllegalRequestTarget:
                         return send(ResponseGenerator::bad_request(req, "Illegal request-target"));
                         break;
-                    case FAST_REQUESTS::NotFound:
+                    case ResponseGenerator::FAST_REQUESTS::NotFound:
                         return send(ResponseGenerator::not_found(req, req.target()));
                         break;
                     default:
@@ -306,10 +298,10 @@ public:
             if (!processorReturn.first) {
                 if (!prepare()) {
                     switch (processError()) {
-                    case FAST_REQUESTS::IllegalRequestTarget:
+                    case ResponseGenerator::FAST_REQUESTS::IllegalRequestTarget:
                         return send(ResponseGenerator::bad_request(req, "Illegal request-target"));
                         break;
-                    case FAST_REQUESTS::NotFound:
+                    case ResponseGenerator::FAST_REQUESTS::NotFound:
                         return send(ResponseGenerator::not_found(req, req.target()));
                         break;
                     default:
@@ -323,10 +315,10 @@ public:
         case http::verb::head:
             if (!prepare()) {
                 switch (processError()) {
-                case FAST_REQUESTS::IllegalRequestTarget:
+                case ResponseGenerator::FAST_REQUESTS::IllegalRequestTarget:
                     return send(ResponseGenerator::bad_request(req, "Illegal request-target"));
                     break;
-                case FAST_REQUESTS::NotFound:
+                case ResponseGenerator::FAST_REQUESTS::NotFound:
                     return send(ResponseGenerator::not_found(req, req.target()));
                     break;
                 default:
@@ -335,12 +327,11 @@ public:
                 }
             }
             break;
-        default:    ///< Этот кейс выполняется при поступлении необрабатываемого запроса
+        default:
             send(ResponseGenerator::server_error(req, "I'm sorry, but I don't know how to process such a request yet, sorry :("));
             break;
         }
 
-        // Cache the size since we need it after the move
         size_t size = 0;
         if (req.method() != http::verb::post) {
             size = body.size();

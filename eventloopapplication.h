@@ -1,10 +1,6 @@
 #ifndef EVENTLOOPAPPLICATION_H
 #define EVENTLOOPAPPLICATION_H
 
-#include "abstractapplication.h"
-#include "defines.h"
-#include "keysightcommand/keysightcommand.h"
-
 #include <boost/function.hpp>
 #include <boost/thread.hpp>
 #include <boost/program_options.hpp>
@@ -15,6 +11,10 @@
 #include <fstream>
 #include <vector>
 #include <future>
+
+#include "abstractapplication.h"
+#include "defines.h"
+#include "keysightcommand/keysightcommand.h"
 
 namespace po = boost::program_options;
 
@@ -34,7 +34,12 @@ typedef struct {
 // ==========================================================
 
 /**
- * @brief Класс приложения, которое строится на принципе бесконечного цикла
+ * @brief Класс пользовательского приложения.
+ *
+ * Данная реализация строится на основе бесконенчого цикла в основной рбочей функции.
+ * В основе приложения лежит абстракция, позволяющая организовать очередь внешних запросов.
+ *
+ * Данное приложение реализует интерфейс управления оборудованием KeySight с использованием TCP и протокола SCPI.
  */
 class EventLoopApplication : public AbstractApplication<initParams_t, processParams_t, stopParams_t>
 {
@@ -57,8 +62,7 @@ public:
         std::pair<int, int> version;
     } appDescription_t;
 
-public:
-    EventLoopApplication(int argc, char * argv[]) : AbstractApplication<initParams_t, processParams_t, stopParams_t>(argc, argv), socket(ioc), resolver(ioc) {
+    EventLoopApplication(int argc, char * argv[]) : AbstractApplication<initParams_t, processParams_t, stopParams_t>(), socket(ioc), resolver(ioc) {
         // Application options description generatign =============
         this->options.add_options()
                 ("help", "Produce this message")
@@ -103,17 +107,32 @@ public:
         return out;
     }
 
+    /**
+     * @brief Инициализация приложени
+     * @param params Startup параметры
+     * @return Код выполнения
+     */
     int init(initParams_t & params) override {
+
+        (void)params;
+
         try {
+            // Тело инициализации отключено для отладки
             // Подключение к целевмоу устройству =================================================================================
-            boost::asio::connect(this->socket, this->resolver.resolve(params.targetIpAddress, std::to_string(params.targetPort)));
+            // boost::asio::connect(this->socket, this->resolver.resolve(params.targetIpAddress, std::to_string(params.targetPort)));
             // ===================================================================================================================
         }  catch (std::exception & ex) {
             return -1;
         }
+
         return 0;
     }
 
+    /**
+     * @brief Основная рабочая функция приложения
+     * @param params Runtime параметры
+     * @return Код выполнения
+     */
     int process(processParams_t & params) override {
         (void)params;
 
@@ -139,11 +158,21 @@ public:
         return 0;
     }
 
+    /**
+     * @brief Функция деинициализации приложения
+     * @param params Endtime параметры
+     * @return Код выполнения
+     */
     int stop(stopParams_t & params) override {
         (void)params;
         return 0;
     }
 
+    /**
+     * @brief Добавление запроса в очередь
+     * @param request Запрос к приложению
+     * @return Результат добавления (флаг добавления в очередь и объект передачи результата)
+     */
     pushResult_t pushRequest(request_func_t request) override {
         pushResult_t ret;
         if (this->taskQueue.size() < 10) {
@@ -159,8 +188,14 @@ public:
         return ret;
     }
 
+    // Описание интерфейсных функций (функций, которые могут быть добавлены в запрос)
     INTERFACES
 
+    /**
+     * @brief Получение описания приложения
+     * @param self Экземпляр приложения
+     * @param output Ссылка на структуру описания приложения
+     */
     static void getAppDescription(EventLoopApplication * self, appDescription_t & output) {
         output.appName = self->applicationName;
         output.boostVersion = BOOST_LIB_VERSION;
@@ -168,6 +203,13 @@ public:
         output.version.second = self->applicationVersion.second;
     }
 
+    /**
+     * @brief Выполнение функции openSwitch из набора функций KeysightSCPI::SwitchDriverCmd
+     * @param self Экземпляр приложения
+     * @param bank Номер банка в устройстве
+     * @param channel Номер канала в банке
+     * @param result Ссылка на внешний флаг для контроля выполнения
+     */
     static void execOpenSwitch(EventLoopApplication * self, int bank, int channel, bool & result) {
         std::string commandLine;
 
@@ -178,6 +220,13 @@ public:
         }
     }
 
+    /**
+     * @brief Выполнение функции closeSwitch из набора функций KeysightSCPI::SwitchDriverCmd
+     * @param self Экземпляр приложения
+     * @param bank Номер банка в устройстве
+     * @param channel Номер канала в банке
+     * @param result Ссылка на внешний флаг для контроля выполнения
+     */
     static void execCloseSwitch(EventLoopApplication * self, int bank, int channel, bool & result) {
         std::string commandLine;
 
@@ -188,6 +237,13 @@ public:
         }
     }
 
+    /**
+     * @brief Выполнение функции setVoltage из набора функций KeysightSCPI::SwitchDriverCmd
+     * @param self Экземпляр приложения
+     * @param bank Номер банка в устройстве
+     * @param volt Значение устанавливаемого напряжения в целевом банке
+     * @param result Ссылка на внешний флаг для контроля выполнения
+     */
     static void execSetVoltage(EventLoopApplication * self, int bank, std::string volt, bool result) {
         std::string commandLine;
 

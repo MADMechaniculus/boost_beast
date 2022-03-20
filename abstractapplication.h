@@ -28,11 +28,7 @@ protected:
     std::pair<int, int> applicationVersion;
 
 public:
-    AbstractApplication(int argc, char * argv[]) {
-        (void)argc;
-        (void)argv;
-        // ...
-    };
+    AbstractApplication(void) {};
 
     /**
      * @brief
@@ -50,7 +46,7 @@ public:
     }
 
     /**
-     * @brief РУчное прерывание работы приложения, этот флаг должен учитываться в
+     * @brief Прерывание работы приложения, этот флаг должен учитываться в
      * главной исполняющей функции приложения (process)
      */
     void halt(void) {
