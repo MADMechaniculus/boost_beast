@@ -41,6 +41,7 @@ LIBS += -L"C:\\libs\\libboost_1.76.0" \
         -lboost_regex-mgw7-mt-x32-1_76 \
         -lboost_program_options-mgw7-mt-x32-1_76 \
         -lboost_atomic-mgw7-mt-x32-1_76 \
+        -lboost_json-mgw7-mt-x32-1_76 \
         -lpthread \
         -lws2_32 \
         -lmswsock

@@ -5,6 +5,8 @@
 #include <boost/thread.hpp>
 #include <boost/program_options.hpp>
 #include <boost/asio.hpp>
+#include <boost/filesystem/operations.hpp>
+#include <boost/json.hpp>
 
 #include <queue>
 #include <iostream>
@@ -32,6 +34,19 @@ typedef struct {
     // Some params to put in stop function
 } stopParams_t;
 // ==========================================================
+
+/**
+ * @namespace JSON_FIELDS
+ * @brief Пространство имён для определения полей в JSON описывающем файловую структуру
+ */
+namespace JSON_FIELDS {
+const std::string fieldName_RetCode = "retCode";
+const std::string fieldName_Id = "id";
+const std::string fieldName_Name = "name";
+const std::string fieldName_IsAbsolute = "isAbsolute";
+const std::string fieldName_Childrens = "childrens";
+const std::string fieldName_FsModel = "fs_model";
+}
 
 /**
  * @brief Класс пользовательского приложения.
@@ -251,6 +266,82 @@ public:
 
         if (result) {
             boost::asio::write(self->socket, boost::asio::buffer(commandLine, commandLine.size()));
+        }
+    }
+
+    /**
+     * @brief Получение файловой структуры внутри директории
+     * @param self Экземплря приложения
+     * @param path Путь в котором будет производиться поиск файловой структруы
+     * @param dataForJson Объект json в который будет помещён результат
+     * @param count_id Указатель на счётчик идентификаторов (по умолчанию nullptr)
+     */
+    static void getFileStruct(EventLoopApplication *self, boost::filesystem::path path, boost::json::object &dataForJson, int * count_id){
+        int idCounter = 0;
+        if (count_id == nullptr)
+            count_id = &idCounter;
+
+        boost::filesystem::directory_iterator begin;
+        if (dataForJson.contains(JSON_FIELDS::fieldName_FsModel))
+            begin = boost::filesystem::directory_iterator(\
+                        boost::filesystem::path(dataForJson[JSON_FIELDS::fieldName_FsModel].as_array()[0].as_object()[JSON_FIELDS::fieldName_Name].as_string().c_str()));
+        else
+            begin = boost::filesystem::directory_iterator(path);
+
+        boost::filesystem::directory_iterator end;
+
+        for(; begin != end; ++begin){
+
+            boost::filesystem::file_status file_status = boost::filesystem::status(begin->path());
+            if(file_status.type() == boost::filesystem::regular_file)
+            {
+                *count_id += 1;
+                if(dataForJson.contains(JSON_FIELDS::fieldName_FsModel)){
+                    dataForJson[JSON_FIELDS::fieldName_FsModel].as_array()[0].as_object()[JSON_FIELDS::fieldName_Childrens].as_array().emplace_back(boost::json::object(\
+                                                                                                                                                        {\
+                                                                                                                                                            {JSON_FIELDS::fieldName_Id, *count_id}, \
+                                                                                                                                                            {JSON_FIELDS::fieldName_Name, begin->path().filename().string()}, \
+                                                                                                                                                            {JSON_FIELDS::fieldName_IsAbsolute, true}\
+                                                                                                                                                        }));
+                }else if(dataForJson[JSON_FIELDS::fieldName_Childrens].is_array()) {
+                    dataForJson[JSON_FIELDS::fieldName_Childrens].as_array().emplace_back(boost::json::object(\
+                                                                                 {\
+                                                                                     {JSON_FIELDS::fieldName_Id, *count_id}, \
+                                                                                     {JSON_FIELDS::fieldName_Name, begin->path().filename().string()}, \
+                                                                                     {JSON_FIELDS::fieldName_IsAbsolute, true}\
+                                                                                 }));
+                } else
+                    throw std::logic_error("Childrens is not array!");
+            }
+            else if(file_status.type() == boost::filesystem::directory_file)
+            {
+                *count_id += 1;
+                if (dataForJson.contains(JSON_FIELDS::fieldName_FsModel)) {
+                    dataForJson[JSON_FIELDS::fieldName_FsModel].as_array()[0].as_object()[JSON_FIELDS::fieldName_Childrens].as_array().emplace_back(\
+                                boost::json::object(\
+                                    {\
+                                        {JSON_FIELDS::fieldName_Id, *count_id}, \
+                                        {JSON_FIELDS::fieldName_Name, begin->path().filename().string()}, \
+                                        {JSON_FIELDS::fieldName_IsAbsolute, false}, \
+                                        {JSON_FIELDS::fieldName_Childrens, boost::json::array()}\
+                                    }));
+                    size_t arraySize = dataForJson[JSON_FIELDS::fieldName_FsModel].as_array()[0].as_object()[JSON_FIELDS::fieldName_Childrens].as_array().size();
+                    boost::json::object &prev = dataForJson[JSON_FIELDS::fieldName_FsModel].as_array()[0].as_object()[JSON_FIELDS::fieldName_Childrens].as_array()[arraySize - 1].as_object();
+                    getFileStruct(self, begin->path(), prev, count_id);
+                } else {
+                    dataForJson[JSON_FIELDS::fieldName_Childrens].as_array().emplace_back(\
+                                boost::json::object(\
+                                    {\
+                                        {JSON_FIELDS::fieldName_Id, *count_id}, \
+                                        {JSON_FIELDS::fieldName_Name, begin->path().filename().string()}, \
+                                        {JSON_FIELDS::fieldName_IsAbsolute, false}, \
+                                        {JSON_FIELDS::fieldName_Childrens, boost::json::array()}\
+                                    }));
+                    size_t arraySize = dataForJson[JSON_FIELDS::fieldName_Childrens].as_array().size();
+                    boost::json::object &prev = dataForJson[JSON_FIELDS::fieldName_Childrens].as_array()[arraySize - 1].as_object();
+                    getFileStruct(self, begin->path(), prev, count_id);
+                }
+            }
         }
     }
 };

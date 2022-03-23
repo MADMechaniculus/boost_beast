@@ -1,8 +1,6 @@
 #ifndef USERGETPROC_H
 #define USERGETPROC_H
 
-#include <boost/json/src.hpp>
-
 #include "abstractgetproc.h"
 #include "eventloopapplication.h"
 
@@ -29,6 +27,7 @@ public:
     CustomGETProcessor() : UserAbstractGET() {}
 
     processorProcRet_t process(std::string target, http::file_body::value_type & ansBody) override {
+        (void)target;
 
         if (appPtr == nullptr)
             return {false, "nullptr application"};
@@ -39,8 +38,6 @@ public:
         processorProcRet_t ret;
         ret.first = false;
 
-        std::cout << "Call from " << __PRETTY_FUNCTION__ << std::endl;
-        std::cout << "Target: " << target << std::endl;
         return ret;   // always false, for default static response
     }
 };

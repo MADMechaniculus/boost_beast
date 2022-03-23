@@ -3,6 +3,7 @@
 
 #include <string>
 #include <boost/beast/http.hpp>
+#include <boost/json.hpp>
 
 namespace http = boost::beast::http;
 

@@ -24,7 +24,7 @@ namespace net = boost::asio;
  * @brief Базовый класс обработчика http запросов
  */
 template<class POSTPROC, class GETPROC>
-class RequestHandler
+class HTTPHandler
 {
 private:
     POSTPROC & postProcessorRef;
@@ -169,7 +169,7 @@ public:
      * @param postRef Ссылка на пользовательский обработчик POST запросов
      * @param getRef Ссылка на пользовательский обработкич GET азпросов
      */
-    RequestHandler(POSTPROC & postRef, GETPROC & getRef) : postProcessorRef(postRef), getProcessorRef(getRef) { };
+    HTTPHandler(POSTPROC & postRef, GETPROC & getRef) : postProcessorRef(postRef), getProcessorRef(getRef) { };
 
     // This is the C++11 equivalent of a generic lambda.
     // The function object is used to send an HTTP message.

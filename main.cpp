@@ -4,7 +4,6 @@
 #include <boost/asio/ip/tcp.hpp>
 #include <boost/config.hpp>
 #include <boost/filesystem.hpp>
-#include <boost/json/src.hpp>
 #include <boost/program_options.hpp>
 
 #include <cstdlib>
@@ -132,14 +131,14 @@ int main(int argc, char* argv[])
             initP.targetIpAddress = vm["targetIP"].as<std::string>();
         } else {
             initP.targetIpAddress = "172.16.13.46";
-            std::cout << "Target device set to default IP: 172.16.13.46" << std::endl;
+            std::cout << "Target device set to default IP: " << initP.targetIpAddress << std::endl;
         }
 
         if (vm.count("targetPORT")) {
             initP.targetPort = vm["targetPORT"].as<uint16_t>();
         } else {
             initP.targetPort = 5025;
-            std::cout << "Target device set to default PORT: 5025" << std::endl;
+            std::cout << "Target device set to default PORT: " << initP.targetPort << std::endl;
         }
 
         postProc.connectApp(&application);
