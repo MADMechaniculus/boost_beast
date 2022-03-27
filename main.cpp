@@ -17,6 +17,8 @@
 #include "eventloopapplication.h"
 #include "userpostproc.h"
 #include "usergetproc.h"
+#include "demopostprocessor.h"
+#include "demoapplication.h"
 
 namespace beast = boost::beast;         // from <boost/beast.hpp>
 namespace http = beast::http;           // from <boost/beast/http.hpp>
@@ -24,8 +26,14 @@ namespace net = boost::asio;            // from <boost/asio.hpp>
 namespace po = boost::program_options;
 using tcp = boost::asio::ip::tcp;       // from <boost/asio/ip/tcp.hpp>
 
-// Определение типа используемого обрабочика запросов
+#define DEMO
+
+#ifdef DEMO
+typedef HTTPHandler<DemoPOSTProcessor, CustomGETProcessor> reqHndlr_t;
+#else
 typedef HTTPHandler<CustomPOSTProcessor, CustomGETProcessor> reqHndlr_t;
+#endif
+// Определение типа используемого обрабочика запросов
 
 // Report a failure
 void fail(beast::error_code ec, char const* what)
@@ -105,10 +113,13 @@ int main(int argc, char* argv[])
     // Application init =================================================================
     boost::thread appThread;
 
+#ifdef DEMO
+    DemoPOSTProcessor postProc;
+#else
     CustomPOSTProcessor postProc;
-    CustomGETProcessor getProc;
+#endif
 
-    processParams_t procPlaceholder;
+    CustomGETProcessor getProc;
 
     // Constructor parameters for application ====
     std::array<const char *, 7> conArgv = { \
@@ -118,15 +129,27 @@ int main(int argc, char* argv[])
         "--appMinorVersion", "5"
     };
 
+#ifdef DEMO
+    demoProcess_t procPlaceholder;
+#else
     initParams_t initP;
+    processParams_t procPlaceholder;
+#endif
+
     // ===========================================
 
     net::ip::address address;
     unsigned short port{0};
     std::shared_ptr<std::string> doc_root;
+
+#ifdef DEMO
+    DemoApplication application(conArgv.size(), (char **)conArgv.data());
+#else
     EventLoopApplication application(conArgv.size(), (char **)conArgv.data());
+#endif
 
     try {
+#ifndef DEMO
         if (vm.count("targetIP")) {
             initP.targetIpAddress = vm["targetIP"].as<std::string>();
         } else {
@@ -141,18 +164,18 @@ int main(int argc, char* argv[])
             std::cout << "Target device set to default PORT: " << initP.targetPort << std::endl;
         }
 
-        postProc.connectApp(&application);
-        getProc.connectApp(&application);
-
         if (application.init(initP) != 0) {
             throw std::runtime_error("Error on init application!");
         }
+#endif
+        postProc.connectApp(&application);
 
         appThread = boost::thread([&]() {
+            std::cout << "Application started\n";
             application.process(procPlaceholder);
         });
     }  catch (std::exception &ex) {
-        std::cout << "Tarminate called after: " << ex.what() << std::endl;
+        std::cout << "Terminate called after: " << ex.what() << std::endl;
         std::exit(EXIT_FAILURE);
     }
 
@@ -162,21 +185,21 @@ int main(int argc, char* argv[])
             address = net::ip::make_address(vm["listen"].as<std::string>());
         } else {
             address = net::ip::make_address("0.0.0.0");
-            std::cout << "Running on default address: 0.0.0.0" << std::endl;
+            std::cout << "Running on default address: " << address.to_string() << std::endl;
         }
 
         if (vm.count("port")) {
             port = vm["port"].as<unsigned short>();
         } else {
             port = 8080;
-            std::cout << "Running in default port: 8080" << std::endl;
+            std::cout << "Running in default port: " << std::to_string(port) << std::endl;
         }
 
         if (vm.count("dir")) {
             doc_root = std::make_shared<std::string>(vm["dir"].as<std::string>());
         } else {
             doc_root = std::make_shared<std::string>(".");
-            std::cout << "Running in default directory: '.'" << std::endl;
+            std::cout << "Running in default directory: '" << *doc_root.get() << "'" << std::endl;
         }
 
         reqHndlr_t handler(postProc, getProc);

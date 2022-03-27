@@ -10,7 +10,7 @@
 #include <queue>
 
 #define INTERFACES \
-    public:
+    public
 
 /**
  * @class AbstractApplication

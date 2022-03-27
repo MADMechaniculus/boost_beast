@@ -5,6 +5,7 @@
 #include "eventloopapplication.h"
 
 class UserAbstractPOST : public virtual AbstractPOSTProc {
+protected:
     EventLoopApplication * appPtr = nullptr;
 public:
     UserAbstractPOST(EventLoopApplication * app) : AbstractPOSTProc(), appPtr(app) {}
@@ -21,9 +22,8 @@ public:
 
 class CustomPOSTProcessor : public UserAbstractPOST
 {
-    EventLoopApplication * appPtr = nullptr;
 public:
-    CustomPOSTProcessor(EventLoopApplication * app) : UserAbstractPOST(app), appPtr(app) {}
+    CustomPOSTProcessor(EventLoopApplication * app) : UserAbstractPOST(app) {}
     CustomPOSTProcessor() : UserAbstractPOST() {}
 
     processorProcRet_t process(std::string targetJson, http::string_body::value_type & ansBody) override {
