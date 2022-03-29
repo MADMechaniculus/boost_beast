@@ -96,10 +96,10 @@ int main(int argc, char* argv[])
             ("help", "Produce this message")
             ("listen", po::value<std::string>(), "Server listening IP family")
             ("port", po::value<uint16_t>(), "Server listening port")
-            ("dir", po::value<std::string>(), "Server working directory")
-            ("targetIP", po::value<std::string>(), "Target device IP")
-            ("targetPORT", po::value<uint16_t>(), "Target device port")
-            ("debug", po::value<int>(), "Debug mode");
+            ("dir", po::value<std::string>(), "Server working directory");
+//            ("targetIP", po::value<std::string>(), "Target device IP")
+//            ("targetPORT", po::value<uint16_t>(), "Target device port")
+//            ("debug", po::value<int>(), "Debug mode")
 
     po::variables_map vm;
     po::store(po::parse_command_line(argc, argv, options), vm);

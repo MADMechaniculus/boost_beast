@@ -52,13 +52,18 @@ LIBS += -L"C:\\libs\\libboost_1.76.0" \
 }
 
 unix {
-INCLUDEPATH += "/usr/include/libboost_1.76.0"
+INCLUDEPATH += \
+        "/usr/include/libboost_1.76.0" \
+        "/usr/include/boostlibs/boost_1_76_0"
 
 LIBS += -L"/usr/lib/libboost_1.76.0" \
+        -L"/usr/lib/boost/1_76_0" \
         -lboost_system \
         -lboost_thread \
         -lboost_filesystem \
         -lboost_regex \
         -lboost_program_options \
+        -lboost_json \
+        -lboost_chrono \
         -lpthread
 }

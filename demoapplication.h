@@ -190,6 +190,8 @@ public:
             std::cout << "... NO! We stand place!\n";
             result = false;
         }
+
+        std::cout << std::flush;
     }
 };
 

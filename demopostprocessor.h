@@ -36,6 +36,7 @@ public:
         ret.first = false;
 
         boost::json::object answerJson;
+        answerJson.emplace("retCode", boost::json::value((int64_t)-1));
 
         boost::json::object obj;
         boost::json::value value = boost::json::parse(targetJson);
