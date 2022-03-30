@@ -7,8 +7,6 @@ SOURCES += \
         abstractapplication.cpp \
         abstractgetproc.cpp \
         abstractpostproc.cpp \
-        demoapplication.cpp \
-        demopostprocessor.cpp \
         eventloopapplication.cpp \
         main.cpp \
         requesthandler.cpp \
@@ -25,8 +23,6 @@ HEADERS += \
         abstractgetproc.h \
         abstractpostproc.h \
         defines.h \
-        demoapplication.h \
-        demopostprocessor.h \
         eventloopapplication.h \
         proctypes.h \
         requesthandler.h \
@@ -53,7 +49,6 @@ LIBS += -L"C:\\libs\\libboost_1.76.0" \
 
 unix {
 INCLUDEPATH += \
-        "/usr/include/libboost_1.76.0" \
         "/usr/include/boostlibs/boost_1_76_0"
 
 LIBS += -L"/usr/lib/libboost_1.76.0" \

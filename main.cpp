@@ -13,20 +13,23 @@
 #include <thread>
 #include <fstream>
 
+//#define DEMO
+
 #include "requesthandler.h"
 #include "eventloopapplication.h"
 #include "userpostproc.h"
 #include "usergetproc.h"
+
+#ifdef DEMO
 #include "demopostprocessor.h"
 #include "demoapplication.h"
+#endif
 
 namespace beast = boost::beast;         // from <boost/beast.hpp>
 namespace http = beast::http;           // from <boost/beast/http.hpp>
 namespace net = boost::asio;            // from <boost/asio.hpp>
 namespace po = boost::program_options;
 using tcp = boost::asio::ip::tcp;       // from <boost/asio/ip/tcp.hpp>
-
-#define DEMO
 
 #ifdef DEMO
 typedef HTTPHandler<DemoPOSTProcessor, CustomGETProcessor> reqHndlr_t;
