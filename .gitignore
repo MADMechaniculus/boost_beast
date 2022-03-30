@@ -1,4 +1,4 @@
 builds
 *.pro.*
 doc
-*.pro.user*
+*.pro.*
