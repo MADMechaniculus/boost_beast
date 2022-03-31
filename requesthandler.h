@@ -247,8 +247,14 @@ public:
                 return false;
             }
 
+            // Запрос файла из директории files
+            if (req.target().find("files/") != std::string::npos) {
+                path = path_cat("./", req.target());
+            } else {
+                path = path_cat(doc_root, req.target());
+            }
+
             // Build the path to the requested file
-            path = path_cat(doc_root, req.target());
             if(req.target().back() == '/')
                 path.append("index.html");
 

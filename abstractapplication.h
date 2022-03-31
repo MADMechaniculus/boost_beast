@@ -4,6 +4,7 @@
 #include <boost/program_options.hpp>
 #include <boost/atomic.hpp>
 #include <boost/memory_order.hpp>
+#include <boost/thread.hpp>
 
 #include "defines.h"
 
@@ -26,6 +27,7 @@ protected:
 
     std::string applicationName;
     std::pair<int, int> applicationVersion;
+    boost::mutex queueMx;
 
 public:
     AbstractApplication(void) {};
@@ -54,6 +56,29 @@ public:
     }
 
     /**
+     * @brief Добавление запроса в очередь сполнения приложения
+     * @param request Функция, переданная через bind содержщая запрос
+     * @return Структуру с результатом добавления запроса в очередь:
+     * - bool - флаг успешности процесса добавления
+     * - std::future - объект future для отслеживания состояния запроса
+     */
+    pushResult_t pushRequest(request_func_t request)
+    {
+        pushResult_t ret;
+        if (this->taskQueue.size() < 10) {
+            task_t temp;
+            temp.second = request;
+            ret.second = temp.first.get_future();
+            boost::lock_guard<boost::mutex>(this->queueMx);
+            this->taskQueue.push(std::move(temp));
+            ret.first = true;
+        } else {
+            ret.first = false;
+        }
+        return ret;
+    }
+
+    /**
      * @brief Инициализация
      * @param params Параметры инициализации
      * @return Результат процесса инициализации
@@ -73,15 +98,6 @@ public:
      * @return Код исполнения
      */
     virtual int stop(StopParams &params) =0;
-
-    /**
-     * @brief Добавление запроса в очередь сполнения приложения
-     * @param request Функция, переданная через bind содержщая запрос
-     * @return Структуру с результатом добавления запроса в очередь:
-     * - bool - флаг успешности процесса добавления
-     * - std::future - объект future для отслеживания состояния запроса
-     */
-    virtual pushResult_t pushRequest(request_func_t request) =0;
 };
 
 #endif // ABSTRACTAPPLICATION_H

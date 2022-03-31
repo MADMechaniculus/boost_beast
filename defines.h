@@ -10,6 +10,9 @@
  */
 typedef std::promise<void> barrierPromise_t;
 
+/**
+ * @brief Барьерный future
+ */
 typedef std::future<void> barrierFuture_t;
 
 /**

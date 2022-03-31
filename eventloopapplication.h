@@ -22,8 +22,7 @@ namespace po = boost::program_options;
 
 // Startup parameters =======================================
 typedef struct {
-    std::string targetIpAddress;
-    uint16_t targetPort;
+    // Some params to put in init function
 } initParams_t;
 
 typedef struct {
@@ -46,6 +45,15 @@ const std::string fieldName_Name = "name";
 const std::string fieldName_IsAbsolute = "isAbsolute";
 const std::string fieldName_Childrens = "childrens";
 const std::string fieldName_FsModel = "fs_model";
+const std::string filedName_AppName = "appName";
+const std::string filedName_AppVersion = "appVersion";
+
+const std::string filedName_AppVersion_minor = "minor";
+const std::string filedName_AppVersion_major = "major";
+
+const std::string filedName_BoostVersion = "boostVersion";
+
+const std::string fieldName_Error = "__err";
 }
 
 /**
@@ -64,9 +72,11 @@ private:
     boost::asio::io_context ioc;
     boost::asio::ip::tcp::socket socket;
     boost::asio::ip::tcp::resolver resolver;
-    boost::mutex queueMx;
 
 public:
+    // Пробрасываем публичную функцию из родительского класса в дочерний
+    using AbstractApplication::pushRequest;
+
     /**
      * @typedef appDescription_t
      * @brief Структура описания приложения
@@ -78,7 +88,6 @@ public:
     } appDescription_t;
 
     EventLoopApplication(int argc, char * argv[]) : AbstractApplication<initParams_t, processParams_t, stopParams_t>(), socket(ioc), resolver(ioc) {
-        // Application options description generatign =============
         this->options.add_options()
                 ("help", "Produce this message")
                 ("appName", po::value<std::string>(), "Application name")
@@ -128,18 +137,7 @@ public:
      * @return Код выполнения
      */
     int init(initParams_t & params) override {
-
         (void)params;
-
-        try {
-            // Тело инициализации отключено для отладки
-            // Подключение к целевмоу устройству =================================================================================
-            // boost::asio::connect(this->socket, this->resolver.resolve(params.targetIpAddress, std::to_string(params.targetPort)));
-            // ===================================================================================================================
-        }  catch (std::exception & ex) {
-            return -1;
-        }
-
         return 0;
     }
 
@@ -183,39 +181,42 @@ public:
         return 0;
     }
 
-    /**
-     * @brief Добавление запроса в очередь
-     * @param request Запрос к приложению
-     * @return Результат добавления (флаг добавления в очередь и объект передачи результата)
-     */
-    pushResult_t pushRequest(request_func_t request) override {
-        pushResult_t ret;
-        if (this->taskQueue.size() < 10) {
-            task_t temp;
-            temp.second = request;
-            ret.second = temp.first.get_future();
-            boost::lock_guard<boost::mutex>(this->queueMx);
-            this->taskQueue.push(std::move(temp));
-            ret.first = true;
-        } else {
-            ret.first = false;
-        }
-        return ret;
-    }
-
     // Описание интерфейсных функций (функций, которые могут быть добавлены в запрос)
-INTERFACES:
+    INTERFACES:
 
     /**
      * @brief Получение описания приложения
      * @param self Экземпляр приложения
      * @param output Ссылка на структуру описания приложения
      */
-    static void getAppDescription(EventLoopApplication * self, appDescription_t & output) {
-        output.appName = self->applicationName;
-        output.boostVersion = BOOST_LIB_VERSION;
-        output.version.first = self->applicationVersion.first;
-        output.version.second = self->applicationVersion.second;
+    static void getAppDescription(EventLoopApplication * self, boost::json::object & description) {
+        try {
+            if (!description.contains(JSON_FIELDS::filedName_AppName)) {
+                description.emplace(JSON_FIELDS::filedName_AppName, boost::json::value(self->applicationName));
+            } else {
+                description[JSON_FIELDS::filedName_AppName].as_string() = self->applicationName;
+            }
+
+            if (!description.contains(JSON_FIELDS::filedName_BoostVersion)) {
+                description.emplace(JSON_FIELDS::filedName_BoostVersion, boost::json::value(BOOST_LIB_VERSION));
+            } else {
+                description[JSON_FIELDS::filedName_BoostVersion].as_string() = BOOST_LIB_VERSION;
+            }
+
+            if (!description.contains(JSON_FIELDS::filedName_AppVersion)) {
+                description.emplace(JSON_FIELDS::filedName_AppVersion, boost::json::object({\
+                                                                                               {JSON_FIELDS::filedName_AppVersion_major, self->applicationVersion.first}, \
+                                                                                               {JSON_FIELDS::filedName_AppVersion_minor, self->applicationVersion.second} \
+                                                                                           }));
+            } else {
+                description[JSON_FIELDS::filedName_AppVersion].as_object() = boost::json::object({\
+                                                                                                     {JSON_FIELDS::filedName_AppVersion_major, self->applicationVersion.first}, \
+                                                                                                     {JSON_FIELDS::filedName_AppVersion_minor, self->applicationVersion.second} \
+                                                                                                 });
+            }
+        } catch (std::exception &ex) {
+            description.emplace(JSON_FIELDS::fieldName_Error, boost::json::value(ex.what()));
+        }
     }
 
     /**
@@ -282,11 +283,17 @@ INTERFACES:
             count_id = &idCounter;
 
         boost::filesystem::directory_iterator begin;
-        if (dataForJson.contains(JSON_FIELDS::fieldName_FsModel))
-            begin = boost::filesystem::directory_iterator(\
-                        boost::filesystem::path(dataForJson[JSON_FIELDS::fieldName_FsModel].as_array()[0].as_object()[JSON_FIELDS::fieldName_Name].as_string().c_str()));
-        else
+        if (dataForJson.contains(JSON_FIELDS::fieldName_FsModel)) {
+            if (boost::filesystem::exists(dataForJson[JSON_FIELDS::fieldName_FsModel].as_array()[0].as_object()[JSON_FIELDS::fieldName_Name].as_string().c_str())) {
+                begin = boost::filesystem::directory_iterator(\
+                            boost::filesystem::path(dataForJson[JSON_FIELDS::fieldName_FsModel].as_array()[0].as_object()[JSON_FIELDS::fieldName_Name].as_string().c_str()));
+            } else {
+                dataForJson.emplace("__err", boost::json::value("Target directory not exists"));
+                return;
+            }
+        } else {
             begin = boost::filesystem::directory_iterator(path);
+        }
 
         boost::filesystem::directory_iterator end;
 
@@ -305,11 +312,11 @@ INTERFACES:
                                                                                                                                                         }));
                 }else if(dataForJson[JSON_FIELDS::fieldName_Childrens].is_array()) {
                     dataForJson[JSON_FIELDS::fieldName_Childrens].as_array().emplace_back(boost::json::object(\
-                                                                                 {\
-                                                                                     {JSON_FIELDS::fieldName_Id, *count_id}, \
-                                                                                     {JSON_FIELDS::fieldName_Name, begin->path().filename().string()}, \
-                                                                                     {JSON_FIELDS::fieldName_IsAbsolute, true}\
-                                                                                 }));
+                                                                                              {\
+                                                                                                  {JSON_FIELDS::fieldName_Id, *count_id}, \
+                                                                                                  {JSON_FIELDS::fieldName_Name, begin->path().filename().string()}, \
+                                                                                                  {JSON_FIELDS::fieldName_IsAbsolute, true}\
+                                                                                              }));
                 } else
                     throw std::logic_error("Childrens is not array!");
             }
@@ -347,4 +354,5 @@ INTERFACES:
 };
 
 #endif // EVENTLOOPAPPLICATION_H
+
 

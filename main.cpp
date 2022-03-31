@@ -100,9 +100,6 @@ int main(int argc, char* argv[])
             ("listen", po::value<std::string>(), "Server listening IP family")
             ("port", po::value<uint16_t>(), "Server listening port")
             ("dir", po::value<std::string>(), "Server working directory");
-//            ("targetIP", po::value<std::string>(), "Target device IP")
-//            ("targetPORT", po::value<uint16_t>(), "Target device port")
-//            ("debug", po::value<int>(), "Debug mode")
 
     po::variables_map vm;
     po::store(po::parse_command_line(argc, argv, options), vm);
@@ -153,20 +150,6 @@ int main(int argc, char* argv[])
 
     try {
 #ifndef DEMO
-        if (vm.count("targetIP")) {
-            initP.targetIpAddress = vm["targetIP"].as<std::string>();
-        } else {
-            initP.targetIpAddress = "172.16.13.46";
-            std::cout << "Target device set to default IP: " << initP.targetIpAddress << std::endl;
-        }
-
-        if (vm.count("targetPORT")) {
-            initP.targetPort = vm["targetPORT"].as<uint16_t>();
-        } else {
-            initP.targetPort = 5025;
-            std::cout << "Target device set to default PORT: " << initP.targetPort << std::endl;
-        }
-
         if (application.init(initP) != 0) {
             throw std::runtime_error("Error on init application!");
         }
